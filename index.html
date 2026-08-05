@@ -95,19 +95,48 @@
     font-weight:900;letter-spacing:.14em;font-size:15px;padding:3.2% 0;
   }
   @container (min-width:1px){ .badge{ font-size:11cqw; padding:3.2cqw 0 } }
-  .card .info{padding:11px 11px 12px}
-  .precio{font-weight:800;color:var(--teal);font-size:18px;line-height:1.1}
-  .detalle{font-size:12px;opacity:.7;margin:3px 0 9px;min-height:15px}
+  .card .info{padding:10px 10px 11px}
+  /* Un renglón por prenda dentro de la misma foto */
+  .renglon{display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--line)}
+  .renglon:last-of-type{border-bottom:0;margin-bottom:6px}
+  .renglon.vend{opacity:.5}
+  .renglon.vend .tx b{text-decoration:line-through}
+  .renglon .num{
+    flex:0 0 20px;height:20px;border-radius:50%;background:var(--mustard);color:var(--teal-dark);
+    font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;
+  }
+  .renglon.vend .num{background:var(--sold);color:#fff}
+  .renglon .tx{flex:1;min-width:0;display:block}
+  .renglon .tx b{display:block;font-size:16px;font-weight:800;color:var(--teal);line-height:1.15}
+  .renglon .tx i{display:block;font-style:normal;font-size:11px;opacity:.72;line-height:1.25;margin-top:1px}
+  .renglon .tg{
+    flex:0 0 34px;height:34px;border-radius:10px;border:0;background:var(--mustard);
+    color:var(--teal-dark);display:flex;align-items:center;justify-content:center;cursor:pointer;
+  }
+  .renglon .tg.done{background:var(--cream);color:var(--teal);border:2px solid var(--teal)}
+  .renglon .tg:active{transform:scale(.92)}
+  .renglon .tg svg{width:17px;height:17px}
+
   .card-acciones{display:flex;gap:6px}
   .mini{
-    flex:1;border:0;border-radius:10px;padding:9px 4px;font-size:12px;font-weight:800;
+    border:0;border-radius:10px;padding:9px 4px;font-size:12px;font-weight:800;
     display:flex;align-items:center;justify-content:center;gap:5px;cursor:pointer;transition:transform .1s;
   }
   .mini:active{transform:scale(.95)}
   .mini svg{width:14px;height:14px}
-  .mini.v{background:var(--mustard);color:var(--teal-dark)}
-  .mini.v.done{background:var(--cream);color:var(--teal);border:2px solid var(--teal)}
-  .mini.s{background:var(--teal);color:var(--cream);flex:0 0 44px}
+  .mini.s{flex:1;background:var(--teal);color:var(--cream)}
+  .mini.b{flex:0 0 40px;background:transparent;color:var(--sold)}
+
+  /* Marcadores numerados sobre la miniatura */
+  .pin{
+    position:absolute;transform:translate(-50%,-50%);
+    width:24px;height:24px;border-radius:50%;background:var(--mustard);color:var(--teal-dark);
+    border:2px solid var(--cream);box-shadow:0 2px 6px rgba(11,39,35,.4);
+    font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;
+  }
+  .pin.v{background:var(--sold);color:#fff}
+  .pin.gr{width:38px;height:38px;font-size:17px;cursor:pointer}
+  .pin.gr.pend{background:var(--cream);color:var(--sold);border-color:var(--sold)}
 
   /* ---------- Vacío ---------- */
   .vacio{text-align:center;padding:70px 20px;opacity:.6}
@@ -162,6 +191,87 @@
   .campo input:focus{border-color:var(--teal)}
   .campo input.grande{font-size:26px;font-weight:800;padding:13px 16px}
   .ayuda{font-size:11.5px;opacity:.6;margin:6px 2px 0;line-height:1.35}
+  /* ---------- Paso 2: marcar prendas sobre la foto ---------- */
+  .marcador{position:relative;border-radius:18px;overflow:hidden;border:2px solid var(--line);background:#fff}
+  /* Sin object-fit ni max-height: así la caja del <img> coincide exactamente
+     con la foto y el toque cae donde la vendedora ve la prenda. */
+  .marcador img{width:100%;height:auto;display:block;background:var(--ink)}
+  .detectando{
+    position:absolute;inset:0;background:rgba(11,39,35,.62);color:var(--cream);
+    display:flex;align-items:center;justify-content:center;gap:10px;font-weight:700;font-size:14px;
+  }
+  .spin{
+    width:20px;height:20px;border-radius:50%;border:3px solid rgba(251,247,240,.3);
+    border-top-color:var(--mustard);animation:g .8s linear infinite;
+  }
+  @keyframes g{to{transform:rotate(360deg)}}
+
+  .listaP{display:flex;flex-direction:column;gap:8px;margin:14px 0 4px}
+  .itemP{
+    display:flex;align-items:center;gap:10px;background:#fff;border:2px solid var(--line);
+    border-radius:14px;padding:10px 12px;cursor:pointer;
+  }
+  .itemP.pend{border-color:var(--sold);border-style:dashed}
+  .itemP .num{
+    flex:0 0 26px;height:26px;border-radius:50%;background:var(--mustard);color:var(--teal-dark);
+    font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;
+  }
+  .itemP.pend .num{background:var(--sold);color:#fff}
+  .itemP .tx{flex:1;min-width:0}
+  .itemP .tx b{display:block;font-size:15px;font-weight:800;color:var(--teal)}
+  .itemP .tx i{display:block;font-style:normal;font-size:12px;opacity:.7;margin-top:1px}
+  .itemP .ed{flex:0 0 20px;color:var(--teal);opacity:.55}
+  .itemP .ed svg{width:18px;height:18px;display:block}
+
+  .tipos{display:flex;flex-wrap:wrap;gap:7px}
+  .tipos button{
+    border:2px solid var(--line);background:#fff;color:var(--ink);border-radius:99px;
+    padding:8px 14px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;
+  }
+  .tipos button.on{background:var(--teal);border-color:var(--teal);color:var(--cream)}
+
+  /* Hoja del editor de prenda */
+  .hoja{
+    background:var(--cream);border-radius:24px 24px 0 0;padding:20px 20px 22px;
+    width:100%;max-height:92dvh;overflow-y:auto;margin-top:auto;
+  }
+  .hoja-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .hoja-hdr b{font-size:18px;color:var(--teal)}
+  .hoja-pie{display:flex;gap:10px;margin-top:4px}
+  .hoja-pie button{
+    flex:1;border:0;border-radius:14px;padding:14px;font-size:15px;font-weight:800;
+    cursor:pointer;font-family:inherit;
+  }
+  .iconbtn.chico{width:36px;height:36px;background:rgba(18,59,54,.1);color:var(--teal)}
+  .iconbtn.chico svg{width:18px;height:18px}
+
+  /* ---------- Cámara en la app ---------- */
+  .camara{position:fixed;inset:0;z-index:90;background:#000;display:flex;flex-direction:column}
+  .camara video{flex:1;width:100%;height:100%;object-fit:cover}
+  .cam-guia{
+    position:absolute;left:8%;right:8%;top:11%;bottom:22%;
+    border:2px dashed rgba(251,247,240,.35);border-radius:20px;pointer-events:none;
+  }
+  .cam-tip{
+    position:absolute;top:calc(16px + env(safe-area-inset-top));left:0;right:0;text-align:center;
+    color:rgba(251,247,240,.9);font-size:13px;font-weight:700;pointer-events:none;
+  }
+  .cam-barra{
+    position:absolute;left:0;right:0;bottom:calc(22px + env(safe-area-inset-bottom));
+    display:flex;align-items:center;justify-content:space-around;
+  }
+  .cam-ic{
+    width:52px;height:52px;border-radius:50%;border:0;background:rgba(251,247,240,.18);
+    color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;
+  }
+  .cam-ic svg{width:24px;height:24px}
+  .cam-obt{
+    width:78px;height:78px;border-radius:50%;border:5px solid rgba(251,247,240,.85);
+    background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;
+  }
+  .cam-obt span{width:60px;height:60px;border-radius:50%;background:var(--cream);display:block}
+  .cam-obt:active span{transform:scale(.88)}
+
   .previa{width:100%;border-radius:18px;border:2px solid var(--line);display:block;background:#fff}
   .pie{font-size:11.5px;text-align:center;opacity:.6;margin:10px 0 0}
   .acciones{display:flex;flex-direction:column;gap:11px;margin-top:16px}
@@ -180,6 +290,7 @@
     position:fixed;inset:0;background:rgba(11,39,35,.55);z-index:70;
     display:flex;align-items:center;justify-content:center;padding:24px;
   }
+  #editor{padding:0;align-items:flex-end}
   .modal{background:var(--cream);border-radius:22px;padding:24px;max-width:340px;width:100%}
   .modal h3{margin:0 0 8px;font-size:19px;color:var(--teal)}
   .modal p{margin:0 0 20px;font-size:14.5px;line-height:1.45;opacity:.8}
