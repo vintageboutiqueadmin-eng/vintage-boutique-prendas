@@ -187,6 +187,14 @@ async function comprimirA(origen, lado){
 
 /* ------------------------------------------------------- COMPOSICIÓN */
 
+/** Recorta un texto con … si no cabe en el ancho dado. */
+function recortar(g, texto, maxAncho){
+  if (g.measureText(texto).width <= maxAncho) return texto;
+  let t = texto;
+  while (t.length > 1 && g.measureText(t + '…').width > maxAncho) t = t.slice(0, -1);
+  return t + '…';
+}
+
 function dibujarMarcador(g, W, H, x, y, numero, vendida){
   const r = Math.round(W * 0.042);
   const cx = Math.max(r + 8, Math.min(W - r - 8, x * W));
@@ -256,7 +264,7 @@ async function componer(fotoBlob, prendas, opciones){
 
       g.fillStyle = '#FBF7F0';
       g.font = '600 ' + Math.round(H * 0.031) + 'px ' + FUENTE;
-      g.fillText(detalle, margen, base - Math.round(H * 0.038));
+      g.fillText(recortar(g, detalle, W - margen * 2), margen, base - Math.round(H * 0.038));
 
       g.fillStyle = '#D69A2D';
       g.font = '800 ' + Math.round(H * 0.072) + 'px ' + FUENTE;
@@ -282,27 +290,43 @@ async function componer(fotoBlob, prendas, opciones){
         g.textAlign = 'left'; g.textBaseline = 'alphabetic';
         x += r * 2 + Math.round(W * 0.022);
 
-        // tipo
         const tipo = (p.tipo || 'Prenda').toUpperCase();
-        g.fillStyle = apagada ? 'rgba(251,247,240,0.45)' : '#FBF7F0';
-        g.font = '800 ' + Math.round(altoLin * 0.40) + 'px ' + FUENTE;
-        g.fillText(tipo, x, y);
-        x += g.measureText(tipo).width + Math.round(W * 0.020);
-
-        // precio
-        g.fillStyle = apagada ? 'rgba(176,65,62,0.85)' : '#D69A2D';
-        g.font = '900 ' + Math.round(altoLin * 0.50) + 'px ' + FUENTE;
         const txtPrecio = quetzales(p.precio);
-        g.fillText(txtPrecio, x, y);
-        x += g.measureText(txtPrecio).width + Math.round(W * 0.020);
-
-        // talla y marca
         let cola = 'Talla ' + (p.talla || '—');
         if (p.marca && p.marca.trim()) cola += ' · ' + p.marca.trim();
         if (apagada) cola += '  · VENDIDO';
+
+        // Si el vendedor escribió un tipo largo ("Chumpa de cuero"), encogemos
+        // la línea hasta que quepa en vez de que se salga de la foto.
+        const hueco = W - margen - x;
+        const sep = Math.round(W * 0.020);
+        const ancho = (k) => {
+          g.font = '800 ' + Math.round(altoLin * 0.40 * k) + 'px ' + FUENTE;
+          const a = g.measureText(tipo).width;
+          g.font = '900 ' + Math.round(altoLin * 0.50 * k) + 'px ' + FUENTE;
+          const b = g.measureText(txtPrecio).width;
+          g.font = '600 ' + Math.round(altoLin * 0.34 * k) + 'px ' + FUENTE;
+          return a + b + g.measureText(cola).width + sep * 2;
+        };
+        let k = 1;
+        while (k > 0.66 && ancho(k) > hueco) k -= 0.06;
+
+        // tipo
+        g.fillStyle = apagada ? 'rgba(251,247,240,0.45)' : '#FBF7F0';
+        g.font = '800 ' + Math.round(altoLin * 0.40 * k) + 'px ' + FUENTE;
+        g.fillText(tipo, x, y);
+        x += g.measureText(tipo).width + sep;
+
+        // precio
+        g.fillStyle = apagada ? 'rgba(176,65,62,0.85)' : '#D69A2D';
+        g.font = '900 ' + Math.round(altoLin * 0.50 * k) + 'px ' + FUENTE;
+        g.fillText(txtPrecio, x, y);
+        x += g.measureText(txtPrecio).width + sep;
+
+        // talla y marca (lo último que se recorta si aún no cabe)
         g.fillStyle = apagada ? 'rgba(251,247,240,0.45)' : 'rgba(251,247,240,0.88)';
-        g.font = '600 ' + Math.round(altoLin * 0.34) + 'px ' + FUENTE;
-        g.fillText(cola, x, y);
+        g.font = '600 ' + Math.round(altoLin * 0.34 * k) + 'px ' + FUENTE;
+        g.fillText(recortar(g, cola, W - margen - x), x, y);
 
         y -= altoLin;
       }
@@ -737,7 +761,7 @@ let _camaraTrasera = true;
 
 async function abrirCamara(){
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-    $('#filein').click(); return;
+    $('#filecam').click(); return;   // respaldo: cámara del sistema
   }
   try{
     _stream = await navigator.mediaDevices.getUserMedia({
@@ -749,8 +773,8 @@ async function abrirCamara(){
       audio: false
     });
   }catch(e){
-    console.warn('Cámara no disponible, usamos el selector del sistema', e);
-    $('#filein').click();
+    console.warn('Cámara no disponible, usamos la del sistema', e);
+    $('#filecam').click();
     return;
   }
 
@@ -914,9 +938,12 @@ function editorPrenda(){
         '<button class="iconbtn chico" data-cerraredit="1" aria-label="Cerrar">' + I.cerrar + '</button>' +
       '</div>' +
       '<div class="campo"><label>¿Qué prenda es?</label>' +
+        '<input id="e-tipo" type="text" placeholder="Ej. Blusa, Bolsa, Cinturón…" ' +
+        'maxlength="28" value="' + esc(m.tipo) + '">' +
         '<div class="tipos">' + TIPOS.map(t =>
           '<button data-tipo="' + esc(t) + '" class="' + (m.tipo === t ? 'on' : '') + '">' +
-          esc(t) + '</button>').join('') + '</div></div>' +
+          esc(t) + '</button>').join('') + '</div>' +
+        '<p class="ayuda">Escribe la que sea, o toca una de abajo para ir más rápido.</p></div>' +
       '<div class="campo"><label>Precio (Q)</label>' +
         '<input id="e-precio" class="grande" type="number" inputmode="decimal" placeholder="0.00" ' +
         'value="' + esc(m.precio) + '"></div>' +
@@ -1037,7 +1064,11 @@ function pintar(){
 
   if (S.vista === 'add' && S.paso === 2 && S.editando != null){
     const m = S.marcas[S.editando];
-    const p = $('#e-precio'), t = $('#e-talla'), k = $('#e-marca');
+    const ti = $('#e-tipo'), p = $('#e-precio'), t = $('#e-talla'), k = $('#e-marca');
+    if (ti) ti.addEventListener('input', e => {
+      m.tipo = e.target.value;
+      $$('[data-tipo]').forEach(b => b.classList.toggle('on', b.dataset.tipo === m.tipo));
+    });
     if (p) p.addEventListener('input', e => { m.precio = e.target.value; });
     if (t) t.addEventListener('input', e => { m.talla  = e.target.value; });
     if (k) k.addEventListener('input', e => { m.marca  = e.target.value; });
@@ -1124,9 +1155,10 @@ document.addEventListener('click', async (ev) => {
   }
   if (d.tipo){
     if (S.editando != null){
-      S.marcas[S.editando].tipo = S.marcas[S.editando].tipo === d.tipo ? '' : d.tipo;
-      $$('[data-tipo]').forEach(b =>
-        b.classList.toggle('on', b.dataset.tipo === S.marcas[S.editando].tipo));
+      const m = S.marcas[S.editando];
+      m.tipo = m.tipo === d.tipo ? '' : d.tipo;
+      const campo = $('#e-tipo'); if (campo) campo.value = m.tipo;
+      $$('[data-tipo]').forEach(b => b.classList.toggle('on', b.dataset.tipo === m.tipo));
     }
     return;
   }
@@ -1199,10 +1231,12 @@ document.addEventListener('click', async (ev) => {
   }
 });
 
-$('#filein').addEventListener('change', async (e) => {
-  const f = e.target.files && e.target.files[0];
-  e.target.value = '';
-  if (f) await usarFoto(f);
+['#filein', '#filecam'].forEach(sel => {
+  $(sel).addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (f) await usarFoto(f);
+  });
 });
 
 window.addEventListener('online',  () => { actualizarSync(); sincronizar(); traerDeLaNube(); });
