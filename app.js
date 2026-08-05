@@ -185,6 +185,44 @@ async function comprimirA(origen, lado){
 
 /* ------------------------------------------------------- COMPOSICIÓN */
 
+/* Rojo del sello: más intenso que el rojo de marca, para que se lea de golpe
+   sobre la foto y desde la miniatura del estado de WhatsApp. */
+const ROJO_VENDIDO = '#E02B20';
+
+const fuenteSello = (altoLin) => '900 ' + Math.round(altoLin * 0.40) + 'px ' + FUENTE;
+
+function medirSello(g, altoLin){
+  g.font = fuenteSello(altoLin);
+  return g.measureText('VENDIDO').width + altoLin * 0.44;
+}
+
+/** Pastilla roja con la palabra VENDIDO, alineada a la línea de la prenda. */
+function dibujarSello(g, x, y, altoLin){
+  g.font = fuenteSello(altoLin);
+  const anchoTexto = g.measureText('VENDIDO').width;
+  const alto = Math.round(altoLin * 0.60);
+  const ancho = Math.round(anchoTexto + altoLin * 0.44);
+  const arriba = y - Math.round(alto * 0.78);
+  const r = alto / 2;
+
+  g.beginPath();
+  if (g.roundRect) g.roundRect(x, arriba, ancho, alto, r);
+  else {
+    g.moveTo(x + r, arriba);
+    g.arcTo(x + ancho, arriba, x + ancho, arriba + alto, r);
+    g.arcTo(x + ancho, arriba + alto, x, arriba + alto, r);
+    g.arcTo(x, arriba + alto, x, arriba, r);
+    g.arcTo(x, arriba, x + ancho, arriba, r);
+  }
+  g.fillStyle = ROJO_VENDIDO;
+  g.fill();
+
+  g.fillStyle = '#FFFFFF';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('VENDIDO', x + ancho / 2, arriba + alto / 2 + Math.round(alto * 0.04));
+  g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+}
+
 /** Recorta un texto con … si no cabe en el ancho dado. */
 function recortar(g, texto, maxAncho){
   if (g.measureText(texto).width <= maxAncho) return texto;
@@ -202,7 +240,7 @@ function dibujarMarcador(g, W, H, x, y, numero, vendida){
   g.shadowColor = 'rgba(11,39,35,0.45)';
   g.shadowBlur  = Math.round(W * 0.014);
   g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2);
-  g.fillStyle = vendida ? '#B0413E' : '#D69A2D'; g.fill();
+  g.fillStyle = vendida ? ROJO_VENDIDO : '#D69A2D'; g.fill();
   g.restore();
 
   g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2);
@@ -279,7 +317,7 @@ async function componer(fotoBlob, prendas, opciones){
         // círculo con el número
         const r = Math.round(altoLin * 0.34);
         g.beginPath(); g.arc(x + r, y - r * 0.55, r, 0, Math.PI * 2);
-        g.fillStyle = apagada ? 'rgba(176,65,62,0.9)' : '#D69A2D';
+        g.fillStyle = apagada ? ROJO_VENDIDO : '#D69A2D';
         g.fill();
         g.fillStyle = apagada ? '#FBF7F0' : '#0B2723';
         g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -292,22 +330,23 @@ async function componer(fotoBlob, prendas, opciones){
         const txtPrecio = quetzales(p.precio);
         let cola = 'Talla ' + (p.talla || '—');
         if (p.marca && p.marca.trim()) cola += ' · ' + p.marca.trim();
-        if (apagada) cola += '  · VENDIDO';
 
         // Si el vendedor escribió un tipo largo ("Chumpa de cuero"), encogemos
         // la línea hasta que quepa en vez de que se salga de la foto.
         const hueco = W - margen - x;
         const sep = Math.round(W * 0.020);
+        // el sello VENDIDO va aparte, en rojo fuerte, no diluido en la talla
+        const anchoSello = apagada ? medirSello(g, altoLin) + sep : 0;
         const ancho = (k) => {
           g.font = '800 ' + Math.round(altoLin * 0.40 * k) + 'px ' + FUENTE;
           const a = g.measureText(tipo).width;
           g.font = '900 ' + Math.round(altoLin * 0.50 * k) + 'px ' + FUENTE;
           const b = g.measureText(txtPrecio).width;
           g.font = '600 ' + Math.round(altoLin * 0.34 * k) + 'px ' + FUENTE;
-          return a + b + g.measureText(cola).width + sep * 2;
+          return a + b + g.measureText(cola).width + sep * 2 + anchoSello;
         };
         let k = 1;
-        while (k > 0.66 && ancho(k) > hueco) k -= 0.06;
+        while (k > 0.60 && ancho(k) > hueco) k -= 0.06;
 
         // tipo
         g.fillStyle = apagada ? 'rgba(251,247,240,0.45)' : '#FBF7F0';
@@ -316,15 +355,23 @@ async function componer(fotoBlob, prendas, opciones){
         x += g.measureText(tipo).width + sep;
 
         // precio
-        g.fillStyle = apagada ? 'rgba(176,65,62,0.85)' : '#D69A2D';
+        g.fillStyle = apagada ? 'rgba(224,43,32,0.92)' : '#D69A2D';
         g.font = '900 ' + Math.round(altoLin * 0.50 * k) + 'px ' + FUENTE;
         g.fillText(txtPrecio, x, y);
         x += g.measureText(txtPrecio).width + sep;
 
         // talla y marca (lo último que se recorta si aún no cabe)
-        g.fillStyle = apagada ? 'rgba(251,247,240,0.45)' : 'rgba(251,247,240,0.88)';
+        g.fillStyle = apagada ? 'rgba(251,247,240,0.55)' : 'rgba(251,247,240,0.88)';
         g.font = '600 ' + Math.round(altoLin * 0.34 * k) + 'px ' + FUENTE;
-        g.fillText(recortar(g, cola, W - margen - x), x, y);
+        const anchoCola = W - margen - x - (apagada ? medirSello(g, altoLin) + sep : 0);
+        const colaFinal = recortar(g, cola, anchoCola);
+        g.fillText(colaFinal, x, y);
+
+        // sello VENDIDO: pastilla roja fuerte al final de la línea
+        if (apagada){
+          x += g.measureText(colaFinal).width + sep;
+          dibujarSello(g, x, y, altoLin);
+        }
 
         y -= altoLin;
       }
@@ -337,17 +384,18 @@ async function componer(fotoBlob, prendas, opciones){
       });
     }
 
-    // Sello VENDIDO cuando ya no queda nada disponible
-    if (opciones.vendida){
-      const altoFranja = Math.round(H * 0.098);
+    // Sello VENDIDO grande, solo cuando hay UNA prenda: si son varias, cada
+    // línea ya lleva su propia pastilla roja y la franja taparía los marcadores.
+    if (opciones.vendida && !varias){
+      const altoFranja = Math.round(H * 0.115);
       const yFranja = H - franja - Math.round(H * 0.012) - altoFranja;
       const yy = Math.max(Math.round(H * 0.10), yFranja);
-      g.fillStyle = 'rgba(176,65,62,0.95)';
+      g.fillStyle = ROJO_VENDIDO;
       g.fillRect(0, yy, W, altoFranja);
-      g.fillStyle = '#FBF7F0';
+      g.fillStyle = '#FFFFFF';
       g.textAlign = 'center'; g.textBaseline = 'middle';
       try{ g.letterSpacing = '0.16em'; }catch(e){}
-      g.font = '900 ' + Math.round(altoFranja * 0.62) + 'px ' + FUENTE;
+      g.font = '900 ' + Math.round(altoFranja * 0.66) + 'px ' + FUENTE;
       g.fillText('VENDIDO', W / 2, yy + altoFranja / 2 + Math.round(altoFranja * 0.03));
       g.textAlign = 'left'; g.textBaseline = 'alphabetic';
       try{ g.letterSpacing = '0px'; }catch(e){}
@@ -645,14 +693,14 @@ async function selloEncima(blobImagen){
     const c = $('#lienzo'); c.width = W; c.height = H;
     const g = c.getContext('2d');
     g.drawImage(im, 0, 0);
-    const alto = Math.round(H * 0.098);
+    const alto = Math.round(H * 0.115);
     const y = Math.round(H * 0.795) - alto;
-    g.fillStyle = 'rgba(176,65,62,0.95)';
+    g.fillStyle = ROJO_VENDIDO;
     g.fillRect(0, y, W, alto);
-    g.fillStyle = '#FBF7F0';
+    g.fillStyle = '#FFFFFF';
     g.textAlign = 'center'; g.textBaseline = 'middle';
     try{ g.letterSpacing = '0.16em'; }catch(e){}
-    g.font = '900 ' + Math.round(alto * 0.62) + 'px ' + FUENTE;
+    g.font = '900 ' + Math.round(alto * 0.66) + 'px ' + FUENTE;
     g.fillText('VENDIDO', W / 2, y + alto / 2 + Math.round(alto * 0.03));
     g.textAlign = 'left'; g.textBaseline = 'alphabetic';
     try{ g.letterSpacing = '0px'; }catch(e){}
