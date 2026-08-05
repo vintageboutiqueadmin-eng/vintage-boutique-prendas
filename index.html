@@ -319,7 +319,10 @@
 
 <!-- Lienzo de composición (fuera de pantalla hasta que se usa) -->
 <canvas id="lienzo" class="oculto"></canvas>
-<input id="filein" type="file" accept="image/*" capture="environment" class="oculto">
+<!-- Dos campos distintos a propósito: si un <input file> lleva el atributo
+     "capture", Android SIEMPRE abre la cámara y nunca la galería. -->
+<input id="filein"  type="file" accept="image/*" class="oculto">
+<input id="filecam" type="file" accept="image/*" capture="environment" class="oculto">
 
 <script src="config.js"></script>
 <script src="app.js"></script>
