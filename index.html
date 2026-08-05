@@ -21,7 +21,8 @@
     --mustard:#D69A2D;
     --mustard-dark:#B37F1E;
     --line:#E4DCCB;
-    --sold:#B0413E;
+    --sold:#B0413E;      /* rojo de marca: textos secundarios, "Eliminar" */
+    --vendido:#E02B20;   /* rojo fuerte del sello VENDIDO */
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0}
@@ -91,10 +92,10 @@
   /* Franja VENDIDO: centrada, ancha, justo encima del precio de la foto */
   .badge{
     position:absolute;left:0;right:0;bottom:20.5%;
-    background:var(--sold);color:#fff;text-align:center;
-    font-weight:900;letter-spacing:.14em;font-size:15px;padding:3.2% 0;
+    background:var(--vendido);color:#fff;text-align:center;
+    font-weight:900;letter-spacing:.14em;font-size:16px;padding:3.6% 0;
   }
-  @container (min-width:1px){ .badge{ font-size:11cqw; padding:3.2cqw 0 } }
+  @container (min-width:1px){ .badge{ font-size:12cqw; padding:3.6cqw 0 } }
   .card .info{padding:10px 10px 11px}
   /* Un renglón por prenda dentro de la misma foto */
   .renglon{display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--line)}
@@ -105,7 +106,7 @@
     flex:0 0 20px;height:20px;border-radius:50%;background:var(--mustard);color:var(--teal-dark);
     font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;
   }
-  .renglon.vend .num{background:var(--sold);color:#fff}
+  .renglon.vend .num{background:var(--vendido);color:#fff}
   .renglon .tx{flex:1;min-width:0;display:block}
   .renglon .tx b{display:block;font-size:16px;font-weight:800;color:var(--teal);line-height:1.15}
   .renglon .tx i{display:block;font-style:normal;font-size:11px;opacity:.72;line-height:1.25;margin-top:1px}
@@ -134,7 +135,7 @@
     border:2px solid var(--cream);box-shadow:0 2px 6px rgba(11,39,35,.4);
     font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;
   }
-  .pin.v{background:var(--sold);color:#fff}
+  .pin.v{background:var(--vendido);color:#fff}
   .pin.gr{width:38px;height:38px;font-size:17px;cursor:pointer}
   .pin.gr.pend{background:var(--cream);color:var(--sold);border-color:var(--sold)}
 
