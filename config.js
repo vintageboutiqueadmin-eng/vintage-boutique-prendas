@@ -18,7 +18,7 @@
 window.VB_CONFIG = {
 
   SUPABASE_URL:      "https://pyelkmsxhnvxcqibxqrt.supabase.co",
-  SUPABASE_ANON_KEY: "",   // pega aquí la Publishable key (sb_publishable_...)
+  SUPABASE_ANON_KEY: "sb_publishable_CEKs2hNVHEFi9IohnZK9CA_FNvn11Xa",   // pega aquí la Publishable key (sb_publishable_...)
 
   BUCKET: "fotos",
 
