@@ -14,7 +14,9 @@ const TIENDAS = CFG.TIENDAS || [
   { id: '7a', nombre: '7a avenida, zona 1' },
   { id: '6a', nombre: '6a avenida, zona 1' }
 ];
-const LOGO_URL   = 'logo.png';
+const LOGO_URL   = 'logo.png';        // "Boutique" en negro — para fotos claras
+const LOGO_CLARO = 'logo-claro.png';  // "Boutique" en crema — para fondos oscuros
+const TIKTOK_URL = CFG.TIKTOK_URL || 'https://www.tiktok.com/@vintageboutiquegt';
 const FUENTE     = '-apple-system, "Segoe UI", Roboto, Arial, sans-serif';
 const ANCHO_FOTO = 1400;   // px del lado mayor de la foto guardada
 const CALIDAD    = 0.85;   // calidad JPEG
@@ -92,6 +94,7 @@ const S = {
   fotoCompuesta: null,    // Blob de la foto final con precio/talla/logo
   previaURL: null,
   precio: '', talla: '', marca: '',
+  idGuardado: null,       // evita duplicar si comparte a WhatsApp y luego a TikTok
   pendientes: 0,
   sincronizando: false
 };
@@ -196,6 +199,74 @@ async function componer(fotoBlob, datos){
       g.drawImage(logo, x, y, lw, lh);
       g.restore();
     }catch(e){ /* si el logo no carga, la foto igual sirve */ }
+
+    return await aBlob(c);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** Toma la imagen ya compuesta y le quema encima la franja VENDIDO, centrada
+ *  y justo arriba del precio. Reescribe el pie para que no quede diciendo
+ *  "DISPONIBLE HOY" en una prenda que ya se vendió. */
+async function marcarVendidoEnImagen(blobCompuesta, datos){
+  const url = URL.createObjectURL(blobCompuesta);
+  try{
+    const foto = await cargarImagen(url);
+    const W = foto.width, H = foto.height;
+    const c = $('#lienzo');
+    c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    g.drawImage(foto, 0, 0);
+
+    // Tapamos el bloque de texto anterior con un degradado que abajo llega a
+    // opaco, y lo volvemos a escribir. Como las medidas son las mismas que en
+    // componer(), el precio y la talla caen exactamente encima de sí mismos.
+    const franja = Math.round(H * 0.30);
+    const deg = g.createLinearGradient(0, H - franja, 0, H);
+    deg.addColorStop(0,    'rgba(11,39,35,0)');
+    deg.addColorStop(0.55, 'rgba(11,39,35,0.72)');
+    deg.addColorStop(0.80, 'rgba(11,39,35,1)');
+    deg.addColorStop(1,    'rgba(11,39,35,1)');
+    g.fillStyle = deg;
+    g.fillRect(0, H - franja, W, franja);
+
+    const margen = Math.round(W * 0.055);
+    const base   = H - Math.round(H * 0.048);
+    g.textAlign = 'left';
+    g.textBaseline = 'alphabetic';
+
+    g.fillStyle = 'rgba(251,247,240,0.62)';
+    g.font = '700 ' + Math.round(H * 0.021) + 'px ' + FUENTE;
+    g.fillText('PIEZA ÚNICA · YA SE VENDIÓ', margen, base);
+
+    let detalle = 'Talla ' + ((datos && datos.talla) || '—');
+    if (datos && datos.marca && datos.marca.trim()) detalle += '   ·   ' + datos.marca.trim();
+    g.fillStyle = '#FBF7F0';
+    g.font = '600 ' + Math.round(H * 0.031) + 'px ' + FUENTE;
+    g.fillText(detalle, margen, base - Math.round(H * 0.038));
+
+    g.fillStyle = '#D69A2D';
+    g.font = '800 ' + Math.round(H * 0.072) + 'px ' + FUENTE;
+    g.fillText(quetzales(datos && datos.precio), margen, base - Math.round(H * 0.085));
+
+    // Franja VENDIDO: ancha, centrada, justo encima del precio
+    const altoFranja = Math.round(H * 0.098);
+    const yFranja    = Math.round(H * 0.795) - altoFranja;
+
+    g.fillStyle = 'rgba(176,65,62,0.95)';
+    g.fillRect(0, yFranja, W, altoFranja);
+
+    g.fillStyle = '#FBF7F0';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    try{ g.letterSpacing = '0.16em'; }catch(e){}
+    g.font = '900 ' + Math.round(altoFranja * 0.62) + 'px ' + FUENTE;
+    g.fillText('VENDIDO', W / 2, yFranja + altoFranja / 2 + Math.round(altoFranja * 0.03));
+
+    // dejamos el contexto como estaba para las siguientes composiciones
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    try{ g.letterSpacing = '0px'; }catch(e){}
 
     return await aBlob(c);
   } finally {
@@ -327,7 +398,10 @@ async function cargarPrendas(){
     .sort((a,b) => (b.fecha_creacion || '').localeCompare(a.fecha_creacion || ''));
 }
 
-async function guardarPrenda(){
+/** Guarda la prenda del flujo actual. Si ya se guardó (porque compartió
+ *  primero a WhatsApp y luego a TikTok), no la duplica. */
+async function guardarSiHaceFalta(){
+  if (S.idGuardado) return S.idGuardado;
   const id = uid();
   const p = {
     id,
@@ -343,10 +417,11 @@ async function guardarPrenda(){
     ruta: null
   };
   await dbGuardar('prendas', p);
+  S.idGuardado = id;
   await encolar(id, 'subir');
   await cargarPrendas();
-  reiniciarFlujo();
-  toast('Prenda guardada');
+  toast('Guardada en el inventario');
+  return id;
 }
 
 async function alternarVendido(id){
@@ -357,7 +432,28 @@ async function alternarVendido(id){
   await encolar(id, 'subir');
   await cargarPrendas();
   pintar();
-  toast(p.vendido ? 'Marcada como vendida' : 'Otra vez disponible');
+
+  if (!p.vendido){ toast('Otra vez disponible'); return; }
+
+  modal({
+    titulo: '¿Avisar que se vendió?',
+    texto: 'Publica la misma foto con el sello VENDIDO encima. Sirve para que la gente vea ' +
+           'que la ropa se mueve rápido y no deje pasar la siguiente.',
+    si: 'Sí, publicar', no: 'No, gracias',
+    alConfirmar: () => compartirVendida(id)
+  });
+}
+
+/** Comparte la foto de una prenda ya vendida, con el sello VENDIDO quemado. */
+async function compartirVendida(id){
+  const p = await dbLeer('prendas', id);
+  const base = p && await blobDe(p);
+  if (!base){ toast('No se pudo abrir la foto'); return; }
+  toast('Preparando la imagen…');
+  const conSello = await marcarVendidoEnImagen(base, p);
+  await compartir(conSello,
+    '¡VENDIDA! ' + quetzales(p.precio) + ' · Talla ' + p.talla +
+    ' — Vintage Boutique. Cada prenda es única: la que te gusta, no espera.');
 }
 
 async function eliminarPrenda(id){
@@ -379,19 +475,28 @@ async function blobDe(p){
   }
   return null;
 }
+/** ¿El teléfono puede compartir archivos con el menú nativo de Android? */
+function puedeCompartirArchivos(){
+  try{
+    const prueba = new File([new Blob([''], { type:'image/jpeg' })], 'p.jpg', { type:'image/jpeg' });
+    return !!(navigator.canShare && navigator.canShare({ files:[prueba] }));
+  }catch(e){ return false; }
+}
+
+/** Devuelve 'compartido' | 'descargado' | 'cancelado'. */
 async function compartir(blob, texto){
   const archivo = new File([blob], 'prenda.jpg', { type:'image/jpeg' });
-  if (navigator.canShare && navigator.canShare({ files:[archivo] })){
+  if (puedeCompartirArchivos()){
     try{
       await navigator.share({ files:[archivo], text: texto || '' });
-      return true;
+      return 'compartido';
     }catch(e){
-      if (e && e.name === 'AbortError') return false;   // el vendedor canceló
+      if (e && e.name === 'AbortError') return 'cancelado';   // el vendedor canceló
     }
   }
   descargar(blob);
   toast('Imagen descargada — compártela desde la galería');
-  return true;
+  return 'descargado';
 }
 function descargar(blob){
   const u = URL.createObjectURL(blob);
@@ -410,19 +515,25 @@ function toast(msg){
   setTimeout(() => { if (d.parentNode) d.remove(); }, 2400);
 }
 
-function modal({ titulo, texto, si, no, alConfirmar }){
+function modal({ titulo, texto, si, no, alConfirmar, alCerrar, enlace, tono }){
   const velo = document.createElement('div');
   velo.className = 'velo';
+  const claseSi = tono === 'peligro' ? 'btn-si' : (no ? 'btn-ok' : 'btn-ok');
+  const accion = enlace
+    ? '<a class="' + claseSi + '" href="' + esc(enlace) + '" target="_blank" rel="noopener" ' +
+      'data-x="si" style="flex:1;text-align:center;text-decoration:none;padding:14px;' +
+      'border-radius:14px;font-size:15px;font-weight:800;display:block">' + esc(si) + '</a>'
+    : '<button class="' + claseSi + '" data-x="si">' + esc(si) + '</button>';
   velo.innerHTML =
     '<div class="modal"><h3>' + esc(titulo) + '</h3><p>' + esc(texto) + '</p>' +
     '<div class="fila">' +
       (no ? '<button class="btn-no" data-x="no">' + esc(no) + '</button>' : '') +
-      '<button class="' + (no ? 'btn-si' : 'btn-ok') + '" data-x="si">' + esc(si) + '</button>' +
+      accion +
     '</div></div>';
   velo.addEventListener('click', (e) => {
     const x = e.target.getAttribute && e.target.getAttribute('data-x');
-    if (x === 'si'){ velo.remove(); if (alConfirmar) alConfirmar(); }
-    else if (x === 'no' || e.target === velo){ velo.remove(); }
+    if (x === 'si'){ velo.remove(); if (alConfirmar) alConfirmar(); if (alCerrar) alCerrar(); }
+    else if (x === 'no' || e.target === velo){ velo.remove(); if (alCerrar) alCerrar(); }
   });
   document.body.appendChild(velo);
 }
@@ -448,7 +559,7 @@ function nombreTienda(){
 /* ------------------------------------------------------------ PANTALLAS */
 function vistaBienvenida(){
   return '<div class="bienvenida">' +
-    '<img src="' + LOGO_URL + '" alt="Vintage Boutique">' +
+    '<img src="' + LOGO_CLARO + '" alt="Vintage Boutique">' +
     '<h2>¿En qué tienda estás?</h2>' +
     '<p>Elige tu tienda una sola vez. Cada tienda ve su propio inventario.</p>' +
     TIENDAS.map(t =>
@@ -477,7 +588,7 @@ function vistaHome(){
         '<div class="card">' +
           '<div class="ph">' +
             '<img src="' + esc(urlDe(p)) + '" alt="Prenda" loading="lazy">' +
-            (p.vendido ? '<span class="badge">VENDIDO</span>' : '') +
+            (p.vendido ? '<div class="badge">VENDIDO</div>' : '') +
           '</div>' +
           '<div class="info">' +
             '<div class="precio">' + esc(quetzales(p.precio)) + '</div>' +
@@ -496,7 +607,7 @@ function vistaHome(){
         '</div>').join('') + '</div>';
 
   return '<div class="hdr">' +
-      '<span class="hdr-logo"><img src="' + LOGO_URL + '" alt="Vintage Boutique"></span>' +
+      '<span class="hdr-logo"><img src="' + LOGO_CLARO + '" alt="Vintage Boutique"></span>' +
       '<div><h1>Mis prendas</h1>' +
       '<div class="sub">' + disponibles + ' disponible' + (disponibles === 1 ? '' : 's') +
         ' · ' + esc(nombreTienda()) + '</div></div>' +
@@ -537,7 +648,6 @@ function vistaAgregar(){
   }
 
   if (S.paso === 2){
-    const tallas = ['XS','S','M','L','XL','28','30','32','34','36','Única'];
     cuerpo =
       (S.previaURL ? '<img src="' + esc(S.previaURL) + '" alt="Prenda" class="previa" ' +
         'style="max-height:250px;object-fit:cover;margin-bottom:20px">' : '') +
@@ -546,9 +656,6 @@ function vistaAgregar(){
         'placeholder="0.00" value="' + esc(S.precio) + '"></div>' +
       '<div class="campo"><label>Talla</label>' +
         '<input id="in-talla" type="text" placeholder="Ej. M, 32, 8, Única…" value="' + esc(S.talla) + '">' +
-        '<div class="tallas">' + tallas.map(t =>
-          '<button data-talla="' + esc(t) + '" class="' + (S.talla === t ? 'on' : '') + '">' +
-          esc(t) + '</button>').join('') + '</div>' +
         '<p class="ayuda">Escribe la talla tal como viene en la prenda — cada tipo de ropa usa su propia numeración.</p></div>' +
       '<div class="campo"><label>Marca <span class="opt">(opcional)</span></label>' +
         '<input id="in-marca" type="text" placeholder="Ej. Levi\'s, Nike…" value="' + esc(S.marca) + '"></div>' +
@@ -573,8 +680,8 @@ function vistaAgregar(){
           '<span class="sub">Se abre TikTok — solo confirma</span></span></button>' +
         '<button class="big teal" data-guardar="1">' +
           '<span class="ic">' + I.check + '</span><span>' +
-          '<span class="lbl">Guardar en la app</span>' +
-          '<span class="sub">Queda en el inventario</span></span></button>' +
+          '<span class="lbl">Solo guardar</span>' +
+          '<span class="sub">Queda en el inventario, sin publicar</span></span></button>' +
         '<button class="big ghost" data-bajar="1">' +
           '<span class="ic">' + I.bajar + '</span><span>' +
           '<span class="lbl">Guardar en la galería</span></span></button>' +
@@ -611,7 +718,7 @@ function refrescarContinuar(){
 function reiniciarFlujo(){
   if (S.previaURL) URL.revokeObjectURL(S.previaURL);
   S.previaURL = null; S.fotoOriginal = null; S.fotoCompuesta = null;
-  S.precio = ''; S.talla = ''; S.marca = '';
+  S.precio = ''; S.talla = ''; S.marca = ''; S.idGuardado = null;
   S.paso = 1; S.vista = 'home';
   pintar();
 }
@@ -619,7 +726,7 @@ function reiniciarFlujo(){
 /* ------------------------------------------------------------ EVENTOS */
 document.addEventListener('click', async (ev) => {
   const el = ev.target.closest('[data-tienda],[data-filtro],[data-nueva],[data-atras],' +
-    '[data-camara],[data-talla],[data-continuar],[data-guardar],[data-compartir],' +
+    '[data-camara],[data-continuar],[data-guardar],[data-compartir],' +
     '[data-bajar],[data-vendido],[data-borrar],[data-share],[data-ajustes]');
   if (!el) return;
   const d = el.dataset;
@@ -645,15 +752,6 @@ document.addEventListener('click', async (ev) => {
 
   if (d.camara){ $('#filein').click(); return; }
 
-  if (d.talla){
-    S.talla = d.talla;
-    const t = $('#in-talla'); if (t) t.value = d.talla;
-    document.querySelectorAll('[data-talla]').forEach(b =>
-      b.classList.toggle('on', b.dataset.talla === d.talla));
-    refrescarContinuar();
-    return;
-  }
-
   if (d.continuar){
     S.paso = 3; pintar();
     try{
@@ -668,24 +766,39 @@ document.addEventListener('click', async (ev) => {
     return;
   }
 
-  if (d.guardar){ await guardarPrenda(); return; }
+  if (d.guardar){ await guardarSiHaceFalta(); reiniciarFlujo(); return; }
   if (d.bajar)  { if (S.fotoCompuesta){ descargar(S.fotoCompuesta); toast('Guardada en la galería'); } return; }
 
   if (d.compartir){
     if (!S.fotoCompuesta) return;
-    const texto = d.compartir === 'wa'
-      ? quetzales(S.precio) + ' · Talla ' + S.talla + (S.marca ? ' · ' + S.marca : '') +
-        ' — pieza única, disponible hoy en Vintage Boutique.'
-      : 'Vintage Boutique · ' + quetzales(S.precio) + ' · Talla ' + S.talla +
-        ' #vintage #ropausada #guatemala #thrift';
-    const ok = await compartir(S.fotoCompuesta, texto);
-    if (ok){
+    const esTikTok = d.compartir === 'tt';
+    const texto = esTikTok
+      ? 'Vintage Boutique · ' + quetzales(S.precio) + ' · Talla ' + S.talla +
+        ' #vintage #ropausada #guatemala #thrift #segundamano'
+      : quetzales(S.precio) + ' · Talla ' + S.talla + (S.marca ? ' · ' + S.marca : '') +
+        ' — pieza única, disponible hoy en Vintage Boutique.';
+
+    // Para TikTok dejamos además la foto en la galería, para que el vendedor
+    // la encuentre en "recientes". (Si el teléfono no puede compartir archivos,
+    // compartir() ya la descarga solo — no la bajamos dos veces.)
+    if (esTikTok && puedeCompartirArchivos()) descargar(S.fotoCompuesta);
+
+    const r = await compartir(S.fotoCompuesta, texto);
+    if (r === 'cancelado') return;       // se arrepintió: lo dejamos donde estaba
+
+    await guardarSiHaceFalta();          // queda en el inventario sin preguntar
+
+    if (esTikTok){
       modal({
-        titulo:'¿Guardar la prenda?',
-        texto:'Guárdala en el inventario para poder marcarla como vendida después.',
-        si:'Sí, guardar', no:'Ahora no',
-        alConfirmar: guardarPrenda
+        titulo: 'Abrir TikTok',
+        texto: 'La foto también quedó guardada en la galería. Si TikTok no se abrió solo, ' +
+               'toca el botón: adentro dale a + y elige la foto más reciente.',
+        si: 'Abrir TikTok', no: 'Ya está',
+        enlace: TIKTOK_URL,
+        alCerrar: reiniciarFlujo
       });
+    } else {
+      reiniciarFlujo();
     }
     return;
   }
@@ -694,9 +807,11 @@ document.addEventListener('click', async (ev) => {
 
   if (d.share){
     const p = await dbLeer('prendas', d.share);
-    const b = p && await blobDe(p);
+    if (!p){ toast('No se pudo abrir la foto'); return; }
+    if (p.vendido){ await compartirVendida(p.id); return; }
+    const b = await blobDe(p);
     if (b) await compartir(b, quetzales(p.precio) + ' · Talla ' + p.talla +
-      (p.marca ? ' · ' + p.marca : '') + ' — Vintage Boutique');
+      (p.marca ? ' · ' + p.marca : '') + ' — pieza única, disponible hoy en Vintage Boutique.');
     else toast('No se pudo abrir la foto');
     return;
   }
@@ -705,7 +820,7 @@ document.addEventListener('click', async (ev) => {
     modal({
       titulo:'¿Eliminar esta prenda?',
       texto:'Se quita del inventario en este teléfono y en la nube. No se puede deshacer.',
-      si:'Sí, eliminar', no:'Cancelar',
+      si:'Sí, eliminar', no:'Cancelar', tono:'peligro',
       alConfirmar: () => eliminarPrenda(d.borrar)
     });
     return;
