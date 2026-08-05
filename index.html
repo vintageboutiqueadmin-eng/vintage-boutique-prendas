@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Vintage Boutique — Prendas</title>
+<meta name="theme-color" content="#123B36">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Prendas">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+  :root{
+    --ink:#211C18;
+    --cream:#FBF7F0;
+    --teal:#123B36;
+    --teal-dark:#0B2723;
+    --mustard:#D69A2D;
+    --mustard-dark:#B37F1E;
+    --line:#E4DCCB;
+    --sold:#B0413E;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--cream);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    font-size:16px;
+    overscroll-behavior-y:contain;
+    -webkit-user-select:none;user-select:none;
+  }
+  input,textarea{-webkit-user-select:text;user-select:text}
+  #app{min-height:100dvh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)}
+
+  /* ---------- Encabezado ---------- */
+  .hdr{
+    background:var(--teal);color:var(--cream);
+    padding:calc(18px + env(safe-area-inset-top)) 20px 16px;
+    display:flex;align-items:center;gap:12px;
+    position:sticky;top:0;z-index:20;
+  }
+  .hdr-logo{background:rgba(251,247,240,.94);border-radius:12px;padding:6px 9px;display:flex;flex-shrink:0}
+  .hdr-logo img{height:26px;width:auto;display:block}
+  .hdr h1{font-size:19px;margin:0;line-height:1.15;font-weight:800}
+  .hdr .sub{font-size:13px;opacity:.78;margin-top:2px}
+  .hdr .spacer{flex:1}
+  .iconbtn{
+    background:rgba(255,255,255,.14);border:0;color:inherit;
+    width:42px;height:42px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    cursor:pointer;transition:transform .1s;
+  }
+  .iconbtn:active{transform:scale(.9)}
+  .iconbtn svg{width:22px;height:22px}
+
+  /* ---------- Estado de sincronización ---------- */
+  .sync{
+    display:flex;align-items:center;gap:8px;
+    font-size:12.5px;padding:8px 20px;
+    background:#fff;border-bottom:1px solid var(--line);color:var(--ink);
+  }
+  .sync .dot{width:9px;height:9px;border-radius:50%;background:#5B9E6B;flex-shrink:0}
+  .sync.pend .dot{background:var(--mustard)}
+  .sync.off .dot{background:#9A938A}
+  .sync .txt{opacity:.75}
+
+  /* ---------- Contenido ---------- */
+  .body{flex:1;padding:16px 20px 110px}
+
+  /* ---------- Filtros ---------- */
+  .filtros{display:flex;gap:8px;margin-bottom:16px}
+  .chip{
+    flex:1;padding:11px 8px;border-radius:99px;border:2px solid var(--line);
+    background:#fff;color:var(--ink);font-size:14px;font-weight:700;
+    cursor:pointer;transition:transform .1s;
+  }
+  .chip:active{transform:scale(.96)}
+  .chip.on{background:var(--teal);border-color:var(--teal);color:var(--cream)}
+
+  /* ---------- Grid de prendas ---------- */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(min-width:620px){.grid{grid-template-columns:repeat(3,1fr)}}
+  @media(min-width:900px){.grid{grid-template-columns:repeat(4,1fr)}}
+  .card{background:#fff;border:2px solid var(--line);border-radius:18px;overflow:hidden;display:flex;flex-direction:column}
+  .card .ph{position:relative;background:var(--line)}
+  .card .ph img{width:100%;aspect-ratio:3/4;object-fit:cover;display:block}
+  .badge{
+    position:absolute;top:8px;left:8px;background:var(--sold);color:#fff;
+    font-size:11px;font-weight:800;padding:4px 9px;border-radius:99px;letter-spacing:.4px;
+  }
+  .card .info{padding:11px 11px 12px}
+  .precio{font-weight:800;color:var(--teal);font-size:18px;line-height:1.1}
+  .detalle{font-size:12px;opacity:.7;margin:3px 0 9px;min-height:15px}
+  .card-acciones{display:flex;gap:6px}
+  .mini{
+    flex:1;border:0;border-radius:10px;padding:9px 4px;font-size:12px;font-weight:800;
+    display:flex;align-items:center;justify-content:center;gap:5px;cursor:pointer;transition:transform .1s;
+  }
+  .mini:active{transform:scale(.95)}
+  .mini svg{width:14px;height:14px}
+  .mini.v{background:var(--mustard);color:var(--teal-dark)}
+  .mini.v.done{background:var(--cream);color:var(--teal);border:2px solid var(--teal)}
+  .mini.s{background:var(--teal);color:var(--cream);flex:0 0 44px}
+
+  /* ---------- Vacío ---------- */
+  .vacio{text-align:center;padding:70px 20px;opacity:.6}
+  .vacio svg{width:44px;height:44px;color:var(--teal);margin-bottom:12px}
+
+  /* ---------- Botón grande ---------- */
+  .big{
+    width:100%;display:flex;align-items:center;gap:15px;border:0;
+    border-radius:18px;padding:15px 18px;cursor:pointer;text-align:left;
+    transition:transform .1s;font-family:inherit;
+  }
+  .big:active{transform:scale(.98)}
+  .big:disabled{opacity:.38;transform:none}
+  .big .ic{
+    width:47px;height:47px;border-radius:50%;background:rgba(255,255,255,.18);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .big .ic svg{width:25px;height:25px}
+  .big .lbl{display:block;font-weight:800;font-size:17px;line-height:1.15}
+  .big .sub{display:block;font-size:12.5px;opacity:.82;margin-top:3px;line-height:1.25}
+  .big.teal{background:var(--teal);color:var(--cream)}
+  .big.mustard{background:var(--mustard);color:var(--teal-dark)}
+  .big.mustard .ic{background:rgba(11,39,35,.14)}
+  .big.ghost{background:#fff;color:var(--teal);border:2px solid var(--teal)}
+  .big.ghost .ic{background:rgba(18,59,54,.09)}
+
+  /* ---------- FAB ---------- */
+  .fab{
+    position:fixed;right:20px;bottom:calc(22px + env(safe-area-inset-bottom));
+    width:66px;height:66px;border-radius:50%;border:0;background:var(--mustard);
+    color:var(--teal-dark);box-shadow:0 6px 20px rgba(33,28,24,.28);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:30;
+    transition:transform .1s;
+  }
+  .fab:active{transform:scale(.9)}
+  .fab svg{width:31px;height:31px}
+
+  /* ---------- Pasos ---------- */
+  .pasos{display:flex;gap:7px;padding:14px 20px 0}
+  .pasos i{flex:1;height:6px;border-radius:99px;background:var(--line)}
+  .pasos i.on{background:var(--mustard)}
+
+  /* ---------- Formulario ---------- */
+  .campo{margin-bottom:18px}
+  .campo label{display:block;font-weight:800;font-size:12.5px;text-transform:uppercase;
+    letter-spacing:.6px;color:var(--teal);margin-bottom:7px}
+  .campo label .opt{font-weight:500;text-transform:none;letter-spacing:0;opacity:.6}
+  .campo input{
+    width:100%;border:2px solid var(--line);border-radius:14px;background:#fff;
+    padding:14px 16px;font-size:18px;color:var(--ink);font-family:inherit;outline:0;
+  }
+  .campo input:focus{border-color:var(--teal)}
+  .campo input.grande{font-size:26px;font-weight:800;padding:13px 16px}
+  .ayuda{font-size:11.5px;opacity:.6;margin:6px 2px 0;line-height:1.35}
+  .tallas{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
+  .tallas button{
+    border:2px solid var(--line);background:#fff;color:var(--ink);border-radius:99px;
+    padding:8px 15px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;
+  }
+  .tallas button.on{background:var(--teal);border-color:var(--teal);color:var(--cream)}
+
+  .previa{width:100%;border-radius:18px;border:2px solid var(--line);display:block;background:#fff}
+  .pie{font-size:11.5px;text-align:center;opacity:.6;margin:10px 0 0}
+  .acciones{display:flex;flex-direction:column;gap:11px;margin-top:16px}
+
+  /* ---------- Toast ---------- */
+  .toast{
+    position:fixed;left:50%;transform:translateX(-50%);
+    bottom:calc(102px + env(safe-area-inset-bottom));
+    background:var(--ink);color:var(--cream);padding:13px 22px;border-radius:99px;
+    font-size:14px;font-weight:700;box-shadow:0 6px 20px rgba(33,28,24,.3);z-index:60;
+    max-width:88vw;text-align:center;
+  }
+
+  /* ---------- Modal ---------- */
+  .velo{
+    position:fixed;inset:0;background:rgba(11,39,35,.55);z-index:70;
+    display:flex;align-items:center;justify-content:center;padding:24px;
+  }
+  .modal{background:var(--cream);border-radius:22px;padding:24px;max-width:340px;width:100%}
+  .modal h3{margin:0 0 8px;font-size:19px;color:var(--teal)}
+  .modal p{margin:0 0 20px;font-size:14.5px;line-height:1.45;opacity:.8}
+  .modal .fila{display:flex;gap:10px}
+  .modal .fila button{
+    flex:1;border:0;border-radius:14px;padding:14px;font-size:15px;font-weight:800;
+    cursor:pointer;font-family:inherit;
+  }
+  .btn-no{background:#fff;color:var(--teal);border:2px solid var(--line)!important}
+  .btn-si{background:var(--sold);color:#fff}
+  .btn-ok{background:var(--teal);color:var(--cream)}
+
+  /* ---------- Selector de tienda (primer arranque) ---------- */
+  .bienvenida{
+    min-height:100dvh;display:flex;flex-direction:column;justify-content:center;
+    padding:32px 26px;gap:14px;background:var(--teal);color:var(--cream);
+  }
+  .bienvenida img{width:190px;max-width:62%;margin:0 auto 6px;display:block;
+    background:rgba(251,247,240,.94);border-radius:16px;padding:12px}
+  .bienvenida h2{text-align:center;font-size:21px;margin:8px 0 2px}
+  .bienvenida p{text-align:center;font-size:14.5px;opacity:.8;margin:0 0 18px;line-height:1.45}
+  .oculto{display:none!important}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<!-- Lienzo de composición (fuera de pantalla hasta que se usa) -->
+<canvas id="lienzo" class="oculto"></canvas>
+<input id="filein" type="file" accept="image/*" capture="environment" class="oculto">
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
