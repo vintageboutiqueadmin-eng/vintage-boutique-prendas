@@ -27,9 +27,14 @@ Costo total: **Q0**. Todo cabe en los planes gratuitos.
 3. Abre el archivo `supabase-setup.sql` de esta carpeta, copia **todo** el
    contenido y pégalo en el editor.
 4. Presiona **Run** (o `Ctrl + Enter`). Debe decir *Success. No rows returned*.
-5. Menú lateral → **Settings** → **API**. Ahí verás dos datos:
-   - **Project URL** — algo como `https://abcdefghijk.supabase.co`
-   - **anon public** (llave larga que empieza con `eyJ…`)
+5. **Settings** → **Data API** → copia el **API URL**.
+   Viene así: `https://xxxxxxx.supabase.co/rest/v1/`
+   → tú necesitas **solo hasta `.supabase.co`**, sin el `/rest/v1/`.
+6. **Settings** → **API Keys** → pestaña *Publishable and secret API keys* →
+   botón de copiar de la **Publishable key** (empieza con `sb_publishable_`).
+
+   > ⚠️ Copia la **Publishable**, nunca la **Secret** (`sb_secret_`). La secreta
+   > da acceso total y no debe salir de tu computadora.
 
    Déjalos a la mano; los usas en el Paso 3.
 
@@ -82,9 +87,11 @@ Costo total: **Q0**. Todo cabe en los planes gratuitos.
 2. Pega los dos datos del Paso 1 entre las comillas:
 
    ```js
-   SUPABASE_URL:      "https://abcdefghijk.supabase.co",
-   SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6...",
+   SUPABASE_URL:      "https://pyelkmsxhnvxcqibxqrt.supabase.co",
+   SUPABASE_ANON_KEY: "sb_publishable_CEKs2h...",
    ```
+
+   La URL ya viene puesta en el archivo; solo falta la llave.
 
 3. **Commit changes**.
 

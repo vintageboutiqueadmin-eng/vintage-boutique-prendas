@@ -204,11 +204,16 @@ async function componer(fotoBlob, datos){
 }
 
 /* --------------------------------------------------- SUPABASE (REST API) */
+// Supabase tiene dos generaciones de llaves:
+//  · las nuevas ("sb_publishable_…") van SOLO en la cabecera apikey;
+//    mandarlas también en Authorization hace que la petición falle.
+//  · las antiguas (JWT, empiezan con "eyJ…") aceptan las dos.
+const LLAVE_NUEVA = String(CFG.SUPABASE_ANON_KEY || '').startsWith('sb_');
+
 function cab(extra){
-  return Object.assign({
-    apikey: CFG.SUPABASE_ANON_KEY,
-    Authorization: 'Bearer ' + CFG.SUPABASE_ANON_KEY
-  }, extra || {});
+  const base = { apikey: CFG.SUPABASE_ANON_KEY };
+  if (!LLAVE_NUEVA) base.Authorization = 'Bearer ' + CFG.SUPABASE_ANON_KEY;
+  return Object.assign(base, extra || {});
 }
 function urlPublica(ruta){
   return CFG.SUPABASE_URL + '/storage/v1/object/public/' + BUCKET + '/' + ruta;
