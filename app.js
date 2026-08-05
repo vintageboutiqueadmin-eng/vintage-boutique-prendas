@@ -25,8 +25,6 @@ const FN_DETECTAR = CFG.FUNCION_DETECTAR || '';   // Edge Function de detección
 const ANCHO_FOTO = 1400;   // px del lado mayor de la foto guardada
 const CALIDAD    = 0.85;   // calidad JPEG
 
-const TIPOS = ['Blusa','Pantalón','Vestido','Falda','Chumpa','Short','Suéter','Zapatos','Accesorio','Conjunto'];
-
 /* ------------------------------------------------------------------ SVG */
 const I = {
   camara:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3.5"/></svg>',
@@ -938,12 +936,8 @@ function editorPrenda(){
         '<button class="iconbtn chico" data-cerraredit="1" aria-label="Cerrar">' + I.cerrar + '</button>' +
       '</div>' +
       '<div class="campo"><label>¿Qué prenda es?</label>' +
-        '<input id="e-tipo" type="text" placeholder="Ej. Blusa, Bolsa, Cinturón…" ' +
-        'maxlength="28" value="' + esc(m.tipo) + '">' +
-        '<div class="tipos">' + TIPOS.map(t =>
-          '<button data-tipo="' + esc(t) + '" class="' + (m.tipo === t ? 'on' : '') + '">' +
-          esc(t) + '</button>').join('') + '</div>' +
-        '<p class="ayuda">Escribe la que sea, o toca una de abajo para ir más rápido.</p></div>' +
+        '<input id="e-tipo" type="text" placeholder="Ej. Blusa, Pantalón, Bolsa…" ' +
+        'maxlength="28" value="' + esc(m.tipo) + '"></div>' +
       '<div class="campo"><label>Precio (Q)</label>' +
         '<input id="e-precio" class="grande" type="number" inputmode="decimal" placeholder="0.00" ' +
         'value="' + esc(m.precio) + '"></div>' +
@@ -1065,10 +1059,7 @@ function pintar(){
   if (S.vista === 'add' && S.paso === 2 && S.editando != null){
     const m = S.marcas[S.editando];
     const ti = $('#e-tipo'), p = $('#e-precio'), t = $('#e-talla'), k = $('#e-marca');
-    if (ti) ti.addEventListener('input', e => {
-      m.tipo = e.target.value;
-      $$('[data-tipo]').forEach(b => b.classList.toggle('on', b.dataset.tipo === m.tipo));
-    });
+    if (ti) ti.addEventListener('input', e => { m.tipo = e.target.value; });
     if (p) p.addEventListener('input', e => { m.precio = e.target.value; });
     if (t) t.addEventListener('input', e => { m.talla  = e.target.value; });
     if (k) k.addEventListener('input', e => { m.marca  = e.target.value; });
@@ -1118,7 +1109,7 @@ document.addEventListener('click', async (ev) => {
   }
 
   const el = ev.target.closest('[data-tienda],[data-filtro],[data-nueva],[data-atras],' +
-    '[data-camara],[data-galeria],[data-cam],[data-editar],[data-tipo],[data-cerraredit],' +
+    '[data-camara],[data-galeria],[data-cam],[data-editar],[data-cerraredit],' +
     '[data-quitar],[data-detectar],[data-continuar],[data-guardar],[data-compartir],' +
     '[data-bajar],[data-vendido],[data-borrar],[data-share],[data-ajustes]');
   if (!el) return;
@@ -1153,16 +1144,6 @@ document.addEventListener('click', async (ev) => {
     S.marcas.splice(parseInt(d.quitar, 10), 1);
     S.editando = null; pintar(); return;
   }
-  if (d.tipo){
-    if (S.editando != null){
-      const m = S.marcas[S.editando];
-      m.tipo = m.tipo === d.tipo ? '' : d.tipo;
-      const campo = $('#e-tipo'); if (campo) campo.value = m.tipo;
-      $$('[data-tipo]').forEach(b => b.classList.toggle('on', b.dataset.tipo === m.tipo));
-    }
-    return;
-  }
-
   if (d.detectar){
     if (!navigator.onLine){ toast('Necesita internet — márcalas tocando la foto'); return; }
     S.marcas = []; pintar();
