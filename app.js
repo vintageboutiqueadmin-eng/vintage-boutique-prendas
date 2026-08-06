@@ -649,12 +649,18 @@ function puedeCompartirArchivos(){
     return !!(navigator.canShare && navigator.canShare({ files:[prueba] }));
   }catch(e){ return false; }
 }
-/** Devuelve 'compartido' | 'descargado' | 'cancelado'. */
-async function compartir(blob, texto){
+/**
+ * Comparte SOLO la imagen, sin texto acompañante.
+ * Si se manda texto, WhatsApp lo pega como comentario encima de la foto y
+ * se encima con el precio y la talla. Toda la información ya va dentro de
+ * la imagen, así que el texto sobra.
+ * Devuelve 'compartido' | 'descargado' | 'cancelado'.
+ */
+async function compartir(blob){
   const archivo = new File([blob], 'prenda.jpg', { type:'image/jpeg' });
   if (puedeCompartirArchivos()){
     try{
-      await navigator.share({ files:[archivo], text: texto || '' });
+      await navigator.share({ files:[archivo] });
       return 'compartido';
     }catch(e){
       if (e && e.name === 'AbortError') return 'cancelado';
@@ -670,14 +676,6 @@ function descargar(blob){
   a.href = u; a.download = 'prenda-' + Date.now() + '.jpg';
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(u), 4000);
-}
-
-function textoDe(prendas, todasVendidas){
-  if (todasVendidas) return '¡VENDIDA! Vintage Boutique — cada prenda es única: la que te gusta, no espera.';
-  const partes = prendas.filter(p => !p.vendido).map(p =>
-    (p.tipo ? p.tipo + ' ' : '') + quetzales(p.precio) + ' talla ' + (p.talla || '—') +
-    (p.marca ? ' ' + p.marca : ''));
-  return partes.join('  ·  ') + ' — pieza única, disponible hoy en Vintage Boutique.';
 }
 
 /** Las publicaciones hechas con la versión anterior ya traen el precio
@@ -724,7 +722,7 @@ async function compartirFoto(grupo){
         pie: todasVendidas ? 'PIEZA ÚNICA · YA SE VENDIÓ' : 'PIEZA ÚNICA · DISPONIBLE HOY'
       });
 
-  await compartir(img, textoDe(f.prendas, todasVendidas));
+  await compartir(img);
 }
 
 /* ------------------------------------------------ DETECCIÓN AUTOMÁTICA */
@@ -805,6 +803,20 @@ function nombreTienda(){
 let _stream = null;
 let _camaraTrasera = true;
 
+/* Todas las fotos salen en 3:4 (vertical), sin importar el teléfono.
+   Es la única forma de que dos fotos tomadas a la misma distancia se vean
+   iguales: cada cámara entrega un cuadro distinto (16:9, 4:3, 1:1…) y antes
+   guardábamos ese cuadro completo aunque en pantalla se viera recortado. */
+const RATIO_FOTO = 3 / 4;
+
+/** Región exactamente igual a la que se ve en el visor. */
+function recorteVisor(vw, vh){
+  let cw, ch;
+  if (vw / vh > RATIO_FOTO){ ch = vh; cw = Math.round(vh * RATIO_FOTO); }
+  else                     { cw = vw; ch = Math.round(vw / RATIO_FOTO); }
+  return { sx: Math.round((vw - cw) / 2), sy: Math.round((vh - ch) / 2), cw, ch };
+}
+
 async function abrirCamara(){
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
     $('#filecam').click(); return;   // respaldo: cámara del sistema
@@ -813,8 +825,9 @@ async function abrirCamara(){
     _stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: _camaraTrasera ? { ideal: 'environment' } : { ideal: 'user' },
-        width:  { ideal: 2160 },
-        height: { ideal: 2880 }
+        width:  { ideal: 1440 },
+        height: { ideal: 1920 },
+        aspectRatio: { ideal: RATIO_FOTO }
       },
       audio: false
     });
@@ -828,14 +841,16 @@ async function abrirCamara(){
   capa.className = 'camara';
   capa.id = 'camara';
   capa.innerHTML =
-    '<video id="video" playsinline autoplay muted></video>' +
-    '<div class="cam-guia"></div>' +
+    '<div class="cam-tip">Lo que se ve en el marco es lo que sale en la foto</div>' +
+    '<div class="cam-marco">' +
+      '<video id="video" playsinline autoplay muted></video>' +
+      '<div class="cam-guia"></div>' +
+    '</div>' +
     '<div class="cam-barra">' +
       '<button class="cam-ic" data-cam="cerrar" aria-label="Cerrar">' + I.cerrar + '</button>' +
       '<button class="cam-obt" data-cam="foto" aria-label="Tomar foto"><span></span></button>' +
       '<button class="cam-ic" data-cam="girar" aria-label="Girar cámara">' + I.girar + '</button>' +
-    '</div>' +
-    '<div class="cam-tip">Encuadra la prenda completa</div>';
+    '</div>';
   document.body.appendChild(capa);
 
   const v = $('#video');
@@ -851,9 +866,13 @@ function cerrarCamara(){
 async function dispararFoto(){
   const v = $('#video');
   if (!v || !v.videoWidth) return;
+
+  // Guardamos EXACTAMENTE el recorte que el visor está mostrando.
+  const { sx, sy, cw, ch } = recorteVisor(v.videoWidth, v.videoHeight);
   const c = document.createElement('canvas');
-  c.width = v.videoWidth; c.height = v.videoHeight;
-  c.getContext('2d').drawImage(v, 0, 0);
+  c.width = cw; c.height = ch;
+  c.getContext('2d').drawImage(v, sx, sy, cw, ch, 0, 0, cw, ch);
+
   const blob = await aBlob(c);
   cerrarCamara();
   await usarFoto(blob);
@@ -1207,14 +1226,9 @@ document.addEventListener('click', async (ev) => {
   if (d.compartir){
     if (!S.compuestaBlob) return;
     const esTikTok = d.compartir === 'tt';
-    const listas = S.marcas.filter(m => m.precio && m.talla);
-    const texto = esTikTok
-      ? 'Vintage Boutique · ' + listas.map(m => quetzales(m.precio)).join(' · ') +
-        ' #vintage #ropausada #guatemala #thrift #segundamano'
-      : textoDe(listas, false);
 
     if (esTikTok && puedeCompartirArchivos()) descargar(S.compuestaBlob);
-    const r = await compartir(S.compuestaBlob, texto);
+    const r = await compartir(S.compuestaBlob);
     if (r === 'cancelado') return;
     await guardarSiHaceFalta();
 
