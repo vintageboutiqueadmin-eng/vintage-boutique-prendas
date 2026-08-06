@@ -239,20 +239,31 @@
   .iconbtn.chico{width:36px;height:36px;background:rgba(18,59,54,.1);color:var(--teal)}
   .iconbtn.chico svg{width:18px;height:18px}
 
-  /* ---------- Cámara en la app ---------- */
-  .camara{position:fixed;inset:0;z-index:90;background:#000;display:flex;flex-direction:column}
-  .camara video{flex:1;width:100%;height:100%;object-fit:cover}
+  /* ---------- Cámara en la app ----------
+     El marco es 3:4 y el video se recorta a ese marco. Lo que se ve dentro
+     del marco es exactamente lo que se guarda: así dos fotos tomadas a la
+     misma distancia salen iguales en cualquier teléfono. */
+  .camara{
+    position:fixed;inset:0;z-index:90;background:#000;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+    padding:calc(14px + env(safe-area-inset-top)) 0 calc(14px + env(safe-area-inset-bottom));
+  }
+  .cam-marco{
+    position:relative;overflow:hidden;background:#111;
+    aspect-ratio:3/4;
+    width:min(100%, calc(66dvh * 0.75));
+  }
+  .camara video{width:100%;height:100%;object-fit:cover;display:block}
   .cam-guia{
-    position:absolute;left:8%;right:8%;top:11%;bottom:22%;
-    border:2px dashed rgba(251,247,240,.35);border-radius:20px;pointer-events:none;
+    position:absolute;left:6%;right:6%;top:5%;bottom:5%;
+    border:2px dashed rgba(251,247,240,.30);border-radius:16px;pointer-events:none;
   }
   .cam-tip{
-    position:absolute;top:calc(16px + env(safe-area-inset-top));left:0;right:0;text-align:center;
-    color:rgba(251,247,240,.9);font-size:13px;font-weight:700;pointer-events:none;
+    color:rgba(251,247,240,.85);font-size:12.5px;font-weight:700;
+    text-align:center;padding:0 24px;pointer-events:none;line-height:1.35;
   }
   .cam-barra{
-    position:absolute;left:0;right:0;bottom:calc(22px + env(safe-area-inset-bottom));
-    display:flex;align-items:center;justify-content:space-around;
+    width:100%;display:flex;align-items:center;justify-content:space-around;
   }
   .cam-ic{
     width:52px;height:52px;border-radius:50%;border:0;background:rgba(251,247,240,.18);
