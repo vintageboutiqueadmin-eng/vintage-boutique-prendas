@@ -2,7 +2,7 @@
    Sube el número de VERSION cada vez que cambies index.html / app.js
    para que los teléfonos descarguen la versión nueva. */
 
-const VERSION = 'vb-v6';
+const VERSION = 'vb-v7';
 const SHELL = [
   './',
   './index.html',
