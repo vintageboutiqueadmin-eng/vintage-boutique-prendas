@@ -20,6 +20,11 @@ const TIENDAS = CFG.TIENDAS || [
 const LOGO_URL   = 'logo.png';        // "Boutique" en negro — para fotos claras
 const LOGO_CLARO = 'logo-claro.png';  // "Boutique" en crema — para fondos oscuros
 const FUENTE     = '-apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+
+/* Número de versión visible en Ajustes. Sirve para saber de un vistazo si el
+   teléfono ya tomó los archivos nuevos o sigue con los viejos en caché.
+   Súbelo junto con VERSION en sw.js cada vez que cambies la app. */
+const VERSION_APP = 9;
 const TIKTOK_URL = CFG.TIKTOK_URL || 'https://www.tiktok.com/@vintageboutiquegt';
 const FN_DETECTAR = CFG.FUNCION_DETECTAR || '';   // Edge Function de detección (opcional)
 const ANCHO_FOTO = 1920;   // px del lado mayor de la foto guardada
@@ -1363,7 +1368,7 @@ document.addEventListener('click', async (ev) => {
 
   if (d.ajustes){
     modal({
-      titulo:'Cambiar de tienda',
+      titulo:'Versión ' + VERSION_APP,
       texto:'Estás en: ' + nombreTienda() + '. Al cambiar verás el inventario de la otra. ' +
             (NUBE ? 'Tus prendas están respaldadas en la nube.' : 'Los datos se guardan solo en este teléfono.'),
       si:'Cambiar de tienda', no:'Cerrar',
@@ -1398,5 +1403,27 @@ document.addEventListener('visibilitychange', () => {
   sincronizar();
   traerDeLaNube();
   setInterval(sincronizar, 60000);
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  /* --- Actualización automática ---
+     Antes había que cerrar y abrir la app varias veces y aun así podía
+     seguir con los archivos viejos en caché. Ahora la app busca versión
+     nueva al abrir y cada 20 minutos, y en cuanto entra se recarga sola
+     (nunca a media publicación, para no perder la foto). */
+  if ('serviceWorker' in navigator){
+    const habiaSW = !!navigator.serviceWorker.controller;
+    let recargando = false;
+
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!habiaSW || recargando) return;
+      if (S.vista !== 'home' || S.fotoBlob) return;   // está publicando: no molestar
+      recargando = true;
+      location.reload();
+    });
+
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+      .then(reg => {
+        reg.update();
+        setInterval(() => reg.update(), 20 * 60 * 1000);
+      })
+      .catch(() => {});
+  }
 })();
