@@ -22,8 +22,8 @@ const LOGO_CLARO = 'logo-claro.png';  // "Boutique" en crema — para fondos osc
 const FUENTE     = '-apple-system, "Segoe UI", Roboto, Arial, sans-serif';
 const TIKTOK_URL = CFG.TIKTOK_URL || 'https://www.tiktok.com/@vintageboutiquegt';
 const FN_DETECTAR = CFG.FUNCION_DETECTAR || '';   // Edge Function de detección (opcional)
-const ANCHO_FOTO = 1400;   // px del lado mayor de la foto guardada
-const CALIDAD    = 0.85;   // calidad JPEG
+const ANCHO_FOTO = 1920;   // px del lado mayor de la foto guardada
+const CALIDAD    = 0.88;   // calidad JPEG (regla del negocio)
 
 /* ------------------------------------------------------------------ SVG */
 const I = {
@@ -185,35 +185,42 @@ async function comprimirA(origen, lado){
 
 /* ------------------------------------------------------- COMPOSICIÓN */
 
+/* FORMATO DE SALIDA — regla fija del negocio.
+   Toda imagen que publica la app mide EXACTAMENTE 1080 x 1920 px (9:16
+   vertical), sin importar cómo venga la foto original. El lienzo nunca
+   cambia: lo que se adapta es la foto. */
+const LIENZO_W = 1080;
+const LIENZO_H = 1920;
+
+/* Zonas que tapa la interfaz de WhatsApp: nada importante va ahí. */
+const ZONA_SUP = 250;    // desde arriba
+const ZONA_INF = 1620;   // de aquí hacia abajo
+
+/* Posiciones fijas (en píxeles del lienzo de 1080x1920) */
+const MARGEN      = 60;
+const LOGO_ANCHO  = 380;
+const LOGO_Y      = 280;     // borde superior del logo
+const DEGRADADO   = 700;     // alto del degradado inferior
+const PRECIO_BASE = 1450;    // línea base del precio (queda entre 1350 y 1500)
+const DORADO      = '#D4A017';
+
 /* Rojo del sello: más intenso que el rojo de marca, para que se lea de golpe
    sobre la foto y desde la miniatura del estado de WhatsApp. */
 const ROJO_VENDIDO = '#E02B20';
 
-const fuenteSello = (altoLin) => '900 ' + Math.round(altoLin * 0.40) + 'px ' + FUENTE;
+const fuenteSello = (alto) => '900 ' + Math.round(alto * 0.62) + 'px ' + FUENTE;
 
-function medirSello(g, altoLin){
-  g.font = fuenteSello(altoLin);
-  return g.measureText('VENDIDO').width + altoLin * 0.44;
+function medirSello(g, alto){
+  g.font = fuenteSello(alto);
+  return g.measureText('VENDIDO').width + alto * 0.70;
 }
 
-/** Pastilla roja con la palabra VENDIDO, alineada a la línea de la prenda. */
-function dibujarSello(g, x, y, altoLin){
-  g.font = fuenteSello(altoLin);
-  const anchoTexto = g.measureText('VENDIDO').width;
-  const alto = Math.round(altoLin * 0.60);
-  const ancho = Math.round(anchoTexto + altoLin * 0.44);
+/** Pastilla roja con la palabra VENDIDO. */
+function dibujarSello(g, x, y, alto){
+  g.font = fuenteSello(alto);
+  const ancho = Math.round(g.measureText('VENDIDO').width + alto * 0.70);
   const arriba = y - Math.round(alto * 0.78);
-  const r = alto / 2;
-
-  g.beginPath();
-  if (g.roundRect) g.roundRect(x, arriba, ancho, alto, r);
-  else {
-    g.moveTo(x + r, arriba);
-    g.arcTo(x + ancho, arriba, x + ancho, arriba + alto, r);
-    g.arcTo(x + ancho, arriba + alto, x, arriba + alto, r);
-    g.arcTo(x, arriba + alto, x, arriba, r);
-    g.arcTo(x, arriba, x + ancho, arriba, r);
-  }
+  caminoRedondeado(g, x, arriba, ancho, alto, alto / 2);
   g.fillStyle = ROJO_VENDIDO;
   g.fill();
 
@@ -221,6 +228,16 @@ function dibujarSello(g, x, y, altoLin){
   g.textAlign = 'center'; g.textBaseline = 'middle';
   g.fillText('VENDIDO', x + ancho / 2, arriba + alto / 2 + Math.round(alto * 0.04));
   g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+}
+
+function caminoRedondeado(g, x, y, w, h, r){
+  g.beginPath();
+  if (g.roundRect){ g.roundRect(x, y, w, h, r); return; }
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y,     x + w, y + h, r);
+  g.arcTo(x + w, y + h, x,     y + h, r);
+  g.arcTo(x,     y + h, x,     y,     r);
+  g.arcTo(x,     y,     x + w, y,     r);
 }
 
 /** Recorta un texto con … si no cabe en el ancho dado. */
@@ -231,191 +248,261 @@ function recortar(g, texto, maxAncho){
   return t + '…';
 }
 
-function dibujarMarcador(g, W, H, x, y, numero, vendida){
-  const r = Math.round(W * 0.042);
-  const cx = Math.max(r + 8, Math.min(W - r - 8, x * W));
-  const cy = Math.max(r + 8, Math.min(H - r - 8, y * H));
+/**
+ * Coloca los círculos sin que se metan en el bloque de precios ni se
+ * encimen entre ellos. Devuelve la posición final de cada uno.
+ */
+function posicionesMarcadores(prendas, aLienzo, limiteInf){
+  const pts = prendas.map((p, i) => {
+    if (typeof p.x !== 'number' || typeof p.y !== 'number') return null;
+    const q = aLienzo(p.x, p.y);
+    return {
+      i, vend: !!p.vendido,
+      x: Math.max(61, Math.min(LIENZO_W - 61, q.x)),
+      y: Math.max(ZONA_SUP + 45, Math.min(limiteInf, q.y))
+    };
+  });
+
+  // si dos quedan encimados, el de arriba sube
+  const orden = pts.filter(Boolean).slice().sort((a, b) => a.y - b.y);
+  for (let k = orden.length - 1; k > 0; k--){
+    const arriba = orden[k - 1], abajo = orden[k];
+    if (Math.abs(abajo.x - arriba.x) < 96 && abajo.y - arriba.y < 96){
+      arriba.y = Math.max(ZONA_SUP + 45, abajo.y - 96);
+    }
+  }
+  return pts;
+}
+
+/** Círculo dorado de 90 px sobre la prenda. */
+function dibujarMarcador(g, x, y, numero, vendida){
+  const r = 45;
+  const cx = x, cy = y;
 
   g.save();
-  g.shadowColor = 'rgba(11,39,35,0.45)';
-  g.shadowBlur  = Math.round(W * 0.014);
+  g.shadowColor = 'rgba(0,0,0,0.45)';
+  g.shadowBlur  = 18;
   g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2);
-  g.fillStyle = vendida ? ROJO_VENDIDO : '#D69A2D'; g.fill();
+  g.fillStyle = vendida ? ROJO_VENDIDO : DORADO; g.fill();
   g.restore();
 
   g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2);
-  g.lineWidth = Math.max(2, Math.round(W * 0.005));
-  g.strokeStyle = '#FBF7F0'; g.stroke();
+  g.lineWidth = 6; g.strokeStyle = '#FFFFFF'; g.stroke();
 
-  g.fillStyle = vendida ? '#FBF7F0' : '#0B2723';
+  g.fillStyle = vendida ? '#FFFFFF' : '#1A1206';
   g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.font = '900 ' + Math.round(r * 1.15) + 'px ' + FUENTE;
-  g.fillText(String(numero), cx, cy + Math.round(r * 0.06));
+  g.font = '900 52px ' + FUENTE;
+  g.fillText(String(numero), cx, cy + 3);
   g.textAlign = 'left'; g.textBaseline = 'alphabetic';
 }
 
 /**
- * Arma la imagen que se publica: foto + logo + una línea por prenda.
- * `prendas` va en orden; las vendidas salen atenuadas con su sello.
+ * Coloca la foto dentro del lienzo vertical y devuelve la función que
+ * convierte una posición relativa de la foto (0-1) a píxeles del lienzo.
+ *  · Foto vertical o casi vertical → se escala a llenar y se recorta.
+ *  · Foto horizontal o cuadrada    → fondo con la misma foto borrosa y
+ *    oscurecida, y encima la foto completa a ancho total, centrada, con
+ *    esquinas redondeadas. Nunca quedan barras negras planas.
+ */
+function adaptarFoto(g, foto){
+  const ratio = foto.width / foto.height;
+  let dx, dy, dw, dh;
+
+  if (ratio <= 0.62){
+    // --- vertical: cover ---
+    const escala = Math.max(LIENZO_W / foto.width, LIENZO_H / foto.height);
+    dw = foto.width * escala; dh = foto.height * escala;
+    dx = (LIENZO_W - dw) / 2;  dy = (LIENZO_H - dh) / 2;
+    g.drawImage(foto, dx, dy, dw, dh);
+
+  } else {
+    // --- horizontal o cuadrada: fondo borroso + foto centrada ---
+    const eF = Math.max(LIENZO_W / foto.width, LIENZO_H / foto.height) * 1.3;
+    const fw = foto.width * eF, fh = foto.height * eF;
+    g.save();
+    g.filter = 'blur(50px)';
+    g.drawImage(foto, (LIENZO_W - fw) / 2, (LIENZO_H - fh) / 2, fw, fh);
+    g.restore();
+    g.fillStyle = 'rgba(0,0,0,0.60)';
+    g.fillRect(0, 0, LIENZO_W, LIENZO_H);
+
+    dw = LIENZO_W;
+    dh = Math.round(foto.height / foto.width * dw);
+    dx = 0;
+    dy = Math.round((LIENZO_H - dh) / 2);
+    g.save();
+    caminoRedondeado(g, dx, dy, dw, dh, 24);
+    g.clip();
+    g.drawImage(foto, dx, dy, dw, dh);
+    g.restore();
+  }
+
+  return (nx, ny) => ({ x: dx + nx * dw, y: dy + ny * dh });
+}
+
+/** Degradado negro inferior: 0% arriba → 85% abajo, en los últimos 700 px. */
+function degradadoInferior(g, desde){
+  const y0 = desde == null ? LIENZO_H - DEGRADADO : desde;
+  const d = g.createLinearGradient(0, y0, 0, LIENZO_H);
+  d.addColorStop(0,    'rgba(0,0,0,0)');
+  d.addColorStop(0.35, 'rgba(0,0,0,0.45)');
+  d.addColorStop(0.70, 'rgba(0,0,0,0.74)');
+  d.addColorStop(1,    'rgba(0,0,0,0.85)');
+  g.fillStyle = d;
+  g.fillRect(0, y0, LIENZO_W, LIENZO_H - y0);
+}
+
+async function dibujarLogo(g){
+  try{
+    const logo = await cargarImagen(LOGO_URL);
+    const lw = LOGO_ANCHO;
+    const lh = Math.round(logo.height / logo.width * lw);
+    const x = LIENZO_W - lw - MARGEN;
+    g.save();
+    g.shadowColor = 'rgba(255,255,255,0.55)'; g.shadowBlur = 14;
+    g.drawImage(logo, x, LOGO_Y, lw, lh);
+    g.shadowColor = 'rgba(0,0,0,0.20)'; g.shadowBlur = 9;
+    g.drawImage(logo, x, LOGO_Y, lw, lh);
+    g.restore();
+  }catch(e){ /* si el logo no carga, la foto igual sirve */ }
+}
+
+/**
+ * Arma la imagen que se publica: 1080x1920 siempre.
+ * Una prenda  → precio grande.
+ * Varias      → círculo dorado sobre cada prenda y una línea numerada abajo.
  */
 async function componer(fotoBlob, prendas, opciones){
   opciones = opciones || {};
   const url = URL.createObjectURL(fotoBlob);
   try{
     const foto = await cargarImagen(url);
-    const W = 1080;
-    const H = Math.round(foto.height / foto.width * W);
     const c = $('#lienzo');
-    c.width = W; c.height = H;
+    c.width = LIENZO_W; c.height = LIENZO_H;
     const g = c.getContext('2d');
-    g.drawImage(foto, 0, 0, W, H);
 
-    const margen  = Math.round(W * 0.055);
+    const aLienzo = adaptarFoto(g, foto);
+
     const varias  = prendas.length > 1;
-    const altoLin = varias ? Math.round(H * 0.070) : 0;
-    const franja  = varias
-      ? Math.min(Math.round(H * 0.55), Math.round(H * 0.13 + altoLin * prendas.length))
-      : Math.round(H * 0.30);
+    const altoLin = 92;
+    // con varias prendas el degradado sube lo necesario para que todas las
+    // líneas se lean; con una sola son los 700 px de la regla
+    const arribaTexto = varias ? PRECIO_BASE - (prendas.length - 1) * altoLin - 90 : null;
+    degradadoInferior(g, varias
+      ? Math.min(LIENZO_H - DEGRADADO, arribaTexto)
+      : null);
 
-    const deg = g.createLinearGradient(0, H - franja, 0, H);
-    deg.addColorStop(0,    'rgba(11,39,35,0)');
-    deg.addColorStop(0.45, 'rgba(11,39,35,0.58)');
-    deg.addColorStop(1,    'rgba(11,39,35,0.94)');
-    g.fillStyle = deg;
-    g.fillRect(0, H - franja, W, franja);
-
-    const base = H - Math.round(H * 0.048);
-
-    // Pie fijo
-    g.fillStyle = 'rgba(251,247,240,0.62)';
-    g.font = '700 ' + Math.round(H * 0.021) + 'px ' + FUENTE;
-    g.fillText(opciones.pie || 'PIEZA ÚNICA · DISPONIBLE HOY', margen, base);
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
 
     if (!varias){
-      // ---------- Una sola prenda: precio grande, como siempre ----------
+      // ---------------- UNA PRENDA ----------------
       const p = prendas[0] || {};
+
+      g.fillStyle = DORADO;
+      g.font = '900 110px ' + FUENTE;
+      g.fillText(quetzales(p.precio), MARGEN, PRECIO_BASE);
+
       let detalle = 'Talla ' + (p.talla || '—');
       if (p.marca && p.marca.trim()) detalle += '   ·   ' + p.marca.trim();
       if (p.tipo) detalle = p.tipo + '   ·   ' + detalle;
+      g.fillStyle = '#FFFFFF';
+      g.font = '600 50px ' + FUENTE;
+      g.fillText(recortar(g, detalle, LIENZO_W - MARGEN * 2), MARGEN, 1518);
 
-      g.fillStyle = '#FBF7F0';
-      g.font = '600 ' + Math.round(H * 0.031) + 'px ' + FUENTE;
-      g.fillText(recortar(g, detalle, W - margen * 2), margen, base - Math.round(H * 0.038));
-
-      g.fillStyle = '#D69A2D';
-      g.font = '800 ' + Math.round(H * 0.072) + 'px ' + FUENTE;
-      g.fillText(quetzales(p.precio), margen, base - Math.round(H * 0.085));
+      g.fillStyle = 'rgba(255,255,255,0.75)';
+      g.font = '700 34px ' + FUENTE;
+      g.fillText(opciones.pie || 'PIEZA ÚNICA · DISPONIBLE HOY', MARGEN, 1572);
 
     } else {
-      // ---------- Varias prendas: una línea numerada por prenda ----------
-      let y = base - Math.round(H * 0.042);
+      // ---------------- VARIAS PRENDAS ----------------
+      let y = PRECIO_BASE;
       for (let i = prendas.length - 1; i >= 0; i--){
         const p = prendas[i];
         const apagada = !!p.vendido;
-        let x = margen;
+        let x = MARGEN;
 
-        // círculo con el número
-        const r = Math.round(altoLin * 0.34);
+        const r = 30;
         g.beginPath(); g.arc(x + r, y - r * 0.55, r, 0, Math.PI * 2);
-        g.fillStyle = apagada ? ROJO_VENDIDO : '#D69A2D';
+        g.fillStyle = apagada ? ROJO_VENDIDO : DORADO;
         g.fill();
-        g.fillStyle = apagada ? '#FBF7F0' : '#0B2723';
+        g.fillStyle = apagada ? '#FFFFFF' : '#1A1206';
         g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.font = '900 ' + Math.round(r * 1.2) + 'px ' + FUENTE;
+        g.font = '900 36px ' + FUENTE;
         g.fillText(String(i + 1), x + r, y - r * 0.5);
         g.textAlign = 'left'; g.textBaseline = 'alphabetic';
-        x += r * 2 + Math.round(W * 0.022);
+        x += r * 2 + 24;
 
         const tipo = (p.tipo || 'Prenda').toUpperCase();
         const txtPrecio = quetzales(p.precio);
         let cola = 'Talla ' + (p.talla || '—');
         if (p.marca && p.marca.trim()) cola += ' · ' + p.marca.trim();
 
-        // Si el vendedor escribió un tipo largo ("Chumpa de cuero"), encogemos
-        // la línea hasta que quepa en vez de que se salga de la foto.
-        const hueco = W - margen - x;
-        const sep = Math.round(W * 0.020);
-        // el sello VENDIDO va aparte, en rojo fuerte, no diluido en la talla
-        const anchoSello = apagada ? medirSello(g, altoLin) + sep : 0;
+        const altoPastilla = 54;
+        const hueco = LIENZO_W - MARGEN - x;
+        const sep = 22;
+        const anchoSello = apagada ? medirSello(g, altoPastilla) + sep : 0;
         const ancho = (k) => {
-          g.font = '800 ' + Math.round(altoLin * 0.40 * k) + 'px ' + FUENTE;
+          g.font = '800 ' + Math.round(48 * k) + 'px ' + FUENTE;
           const a = g.measureText(tipo).width;
-          g.font = '900 ' + Math.round(altoLin * 0.50 * k) + 'px ' + FUENTE;
+          g.font = '900 ' + Math.round(62 * k) + 'px ' + FUENTE;
           const b = g.measureText(txtPrecio).width;
-          g.font = '600 ' + Math.round(altoLin * 0.34 * k) + 'px ' + FUENTE;
+          g.font = '600 ' + Math.round(42 * k) + 'px ' + FUENTE;
           return a + b + g.measureText(cola).width + sep * 2 + anchoSello;
         };
         let k = 1;
         while (k > 0.60 && ancho(k) > hueco) k -= 0.06;
 
-        // tipo
-        g.fillStyle = apagada ? 'rgba(251,247,240,0.45)' : '#FBF7F0';
-        g.font = '800 ' + Math.round(altoLin * 0.40 * k) + 'px ' + FUENTE;
+        g.fillStyle = apagada ? 'rgba(255,255,255,0.55)' : '#FFFFFF';
+        g.font = '800 ' + Math.round(48 * k) + 'px ' + FUENTE;
         g.fillText(tipo, x, y);
         x += g.measureText(tipo).width + sep;
 
-        // precio
-        g.fillStyle = apagada ? 'rgba(224,43,32,0.92)' : '#D69A2D';
-        g.font = '900 ' + Math.round(altoLin * 0.50 * k) + 'px ' + FUENTE;
+        g.fillStyle = apagada ? 'rgba(224,43,32,0.92)' : DORADO;
+        g.font = '900 ' + Math.round(62 * k) + 'px ' + FUENTE;
         g.fillText(txtPrecio, x, y);
         x += g.measureText(txtPrecio).width + sep;
 
-        // talla y marca (lo último que se recorta si aún no cabe)
-        g.fillStyle = apagada ? 'rgba(251,247,240,0.55)' : 'rgba(251,247,240,0.88)';
-        g.font = '600 ' + Math.round(altoLin * 0.34 * k) + 'px ' + FUENTE;
-        const anchoCola = W - margen - x - (apagada ? medirSello(g, altoLin) + sep : 0);
+        g.fillStyle = apagada ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.88)';
+        g.font = '600 ' + Math.round(42 * k) + 'px ' + FUENTE;
+        const anchoCola = LIENZO_W - MARGEN - x - (apagada ? medirSello(g, altoPastilla) + sep : 0);
         const colaFinal = recortar(g, cola, anchoCola);
         g.fillText(colaFinal, x, y);
 
-        // sello VENDIDO: pastilla roja fuerte al final de la línea
         if (apagada){
           x += g.measureText(colaFinal).width + sep;
-          dibujarSello(g, x, y, altoLin);
+          dibujarSello(g, x, y, altoPastilla);
         }
-
         y -= altoLin;
       }
 
-      // marcadores sobre la foto
-      prendas.forEach((p, i) => {
-        if (typeof p.x === 'number' && typeof p.y === 'number'){
-          dibujarMarcador(g, W, H, p.x, p.y, i + 1, !!p.vendido);
-        }
+      g.fillStyle = 'rgba(255,255,255,0.75)';
+      g.font = '700 34px ' + FUENTE;
+      g.fillText(opciones.pie || 'PIEZA ÚNICA · DISPONIBLE HOY', MARGEN, 1572);
+
+      // círculos dorados de 90 px sobre cada prenda, sin invadir los precios
+      const tope = Math.min(ZONA_INF - 45, arribaTexto - 58);
+      posicionesMarcadores(prendas, aLienzo, tope).forEach(m => {
+        if (m) dibujarMarcador(g, m.x, m.y, m.i + 1, m.vend);
       });
     }
 
     // Sello VENDIDO grande, solo cuando hay UNA prenda: si son varias, cada
     // línea ya lleva su propia pastilla roja y la franja taparía los marcadores.
     if (opciones.vendida && !varias){
-      const altoFranja = Math.round(H * 0.115);
-      const yFranja = H - franja - Math.round(H * 0.012) - altoFranja;
-      const yy = Math.max(Math.round(H * 0.10), yFranja);
+      const alto = 200;
+      const yy = 1080;
       g.fillStyle = ROJO_VENDIDO;
-      g.fillRect(0, yy, W, altoFranja);
+      g.fillRect(0, yy, LIENZO_W, alto);
       g.fillStyle = '#FFFFFF';
       g.textAlign = 'center'; g.textBaseline = 'middle';
       try{ g.letterSpacing = '0.16em'; }catch(e){}
-      g.font = '900 ' + Math.round(altoFranja * 0.66) + 'px ' + FUENTE;
-      g.fillText('VENDIDO', W / 2, yy + altoFranja / 2 + Math.round(altoFranja * 0.03));
+      g.font = '900 128px ' + FUENTE;
+      g.fillText('VENDIDO', LIENZO_W / 2, yy + alto / 2 + 6);
       g.textAlign = 'left'; g.textBaseline = 'alphabetic';
       try{ g.letterSpacing = '0px'; }catch(e){}
     }
 
-    // Logo arriba a la derecha, sin recuadro. El resplandor claro deja que
-    // "Boutique" se lea también sobre fotos oscuras.
-    try{
-      const logo = await cargarImagen(LOGO_URL);
-      const lw = Math.round(W * 0.30);
-      const lh = Math.round(logo.height / logo.width * lw);
-      g.save();
-      g.shadowColor = 'rgba(255,255,255,0.55)';
-      g.shadowBlur  = Math.round(W * 0.012);
-      g.drawImage(logo, W - lw - margen, margen, lw, lh);
-      g.shadowColor = 'rgba(0,0,0,0.18)';
-      g.shadowBlur  = Math.round(W * 0.008);
-      g.drawImage(logo, W - lw - margen, margen, lw, lh);
-      g.restore();
-    }catch(e){ /* si el logo no carga, la foto igual sirve */ }
+    await dibujarLogo(g);
 
     return await aBlob(c);
   } finally {
@@ -656,8 +743,8 @@ function puedeCompartirArchivos(){
  * la imagen, así que el texto sobra.
  * Devuelve 'compartido' | 'descargado' | 'cancelado'.
  */
-async function compartir(blob){
-  const archivo = new File([blob], 'prenda.jpg', { type:'image/jpeg' });
+async function compartir(blob, nombre){
+  const archivo = new File([blob], nombre || nombreArchivo(), { type:'image/jpeg' });
   if (puedeCompartirArchivos()){
     try{
       await navigator.share({ files:[archivo] });
@@ -666,14 +753,26 @@ async function compartir(blob){
       if (e && e.name === 'AbortError') return 'cancelado';
     }
   }
-  descargar(blob);
+  descargar(blob, nombre);
   toast('Imagen descargada — compártela desde la galería');
   return 'descargado';
 }
-function descargar(blob){
+function nombreArchivo(prendas){
+  const p = (prendas && prendas[0]) || {};
+  const base = String(p.tipo || 'prenda').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'prenda';
+  const d = new Date();
+  const f = d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+  return 'vintage_' + base + '_' + f + '.jpg';
+}
+
+function descargar(blob, nombre){
   const u = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = u; a.download = 'prenda-' + Date.now() + '.jpg';
+  a.href = u; a.download = nombre || nombreArchivo();
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(u), 4000);
 }
@@ -683,25 +782,27 @@ function descargar(blob){
 function esLegado(f){
   return f.legado === true || (!f.blob && f.prendas.some(p => p.x == null));
 }
-async function selloEncima(blobImagen){
+/** Las lleva al lienzo de 1080x1920 (la regla vale también para ellas) y,
+ *  si ya se vendieron, les pone el sello encima. */
+async function componerLegado(blobImagen, vendida){
   const url = URL.createObjectURL(blobImagen);
   try{
     const im = await cargarImagen(url);
-    const W = im.width, H = im.height;
-    const c = $('#lienzo'); c.width = W; c.height = H;
+    const c = $('#lienzo'); c.width = LIENZO_W; c.height = LIENZO_H;
     const g = c.getContext('2d');
-    g.drawImage(im, 0, 0);
-    const alto = Math.round(H * 0.115);
-    const y = Math.round(H * 0.795) - alto;
-    g.fillStyle = ROJO_VENDIDO;
-    g.fillRect(0, y, W, alto);
-    g.fillStyle = '#FFFFFF';
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    try{ g.letterSpacing = '0.16em'; }catch(e){}
-    g.font = '900 ' + Math.round(alto * 0.66) + 'px ' + FUENTE;
-    g.fillText('VENDIDO', W / 2, y + alto / 2 + Math.round(alto * 0.03));
-    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
-    try{ g.letterSpacing = '0px'; }catch(e){}
+    adaptarFoto(g, im);
+    if (vendida){
+      const alto = 200, y = 1080;
+      g.fillStyle = ROJO_VENDIDO;
+      g.fillRect(0, y, LIENZO_W, alto);
+      g.fillStyle = '#FFFFFF';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      try{ g.letterSpacing = '0.16em'; }catch(e){}
+      g.font = '900 128px ' + FUENTE;
+      g.fillText('VENDIDO', LIENZO_W / 2, y + alto / 2 + 6);
+      g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+      try{ g.letterSpacing = '0px'; }catch(e){}
+    }
     return await aBlob(c);
   } finally { URL.revokeObjectURL(url); }
 }
@@ -716,13 +817,13 @@ async function compartirFoto(grupo){
   const todasVendidas = f.prendas.every(p => p.vendido);
 
   const img = esLegado(f)
-    ? (todasVendidas ? await selloEncima(base) : base)
+    ? await componerLegado(base, todasVendidas)
     : await componer(base, f.prendas, {
         vendida: todasVendidas,
         pie: todasVendidas ? 'PIEZA ÚNICA · YA SE VENDIÓ' : 'PIEZA ÚNICA · DISPONIBLE HOY'
       });
 
-  await compartir(img);
+  await compartir(img, nombreArchivo(f.prendas));
 }
 
 /* ------------------------------------------------ DETECCIÓN AUTOMÁTICA */
@@ -803,11 +904,11 @@ function nombreTienda(){
 let _stream = null;
 let _camaraTrasera = true;
 
-/* Todas las fotos salen en 3:4 (vertical), sin importar el teléfono.
-   Es la única forma de que dos fotos tomadas a la misma distancia se vean
-   iguales: cada cámara entrega un cuadro distinto (16:9, 4:3, 1:1…) y antes
-   guardábamos ese cuadro completo aunque en pantalla se viera recortado. */
-const RATIO_FOTO = 3 / 4;
+/* La cámara encuadra en 9:16, exactamente la forma de la imagen que se
+   publica. Así lo que la vendedora ve en el marco es lo que sale en el
+   estado, sin recortes sorpresa, y dos fotos a la misma distancia salen
+   iguales en cualquier teléfono. */
+const RATIO_FOTO = 9 / 16;
 
 /** Región exactamente igual a la que se ve en el visor. */
 function recorteVisor(vw, vh){
@@ -825,7 +926,7 @@ async function abrirCamara(){
     _stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: _camaraTrasera ? { ideal: 'environment' } : { ideal: 'user' },
-        width:  { ideal: 1440 },
+        width:  { ideal: 1080 },
         height: { ideal: 1920 },
         aspectRatio: { ideal: RATIO_FOTO }
       },
@@ -1221,14 +1322,15 @@ document.addEventListener('click', async (ev) => {
 
   if (d.continuar){ await prepararPrevia(); return; }
   if (d.guardar) { await guardarSiHaceFalta(); reiniciarFlujo(); return; }
-  if (d.bajar)   { if (S.compuestaBlob){ descargar(S.compuestaBlob); toast('Guardada en la galería'); } return; }
+  if (d.bajar)   { if (S.compuestaBlob){ descargar(S.compuestaBlob, nombreArchivo(S.marcas)); toast('Guardada en la galería'); } return; }
 
   if (d.compartir){
     if (!S.compuestaBlob) return;
     const esTikTok = d.compartir === 'tt';
 
-    if (esTikTok && puedeCompartirArchivos()) descargar(S.compuestaBlob);
-    const r = await compartir(S.compuestaBlob);
+    const nombre = nombreArchivo(S.marcas);
+    if (esTikTok && puedeCompartirArchivos()) descargar(S.compuestaBlob, nombre);
+    const r = await compartir(S.compuestaBlob, nombre);
     if (r === 'cancelado') return;
     await guardarSiHaceFalta();
 
