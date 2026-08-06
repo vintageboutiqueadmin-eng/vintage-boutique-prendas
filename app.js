@@ -24,7 +24,7 @@ const FUENTE     = '-apple-system, "Segoe UI", Roboto, Arial, sans-serif';
 /* Número de versión visible en Ajustes. Sirve para saber de un vistazo si el
    teléfono ya tomó los archivos nuevos o sigue con los viejos en caché.
    Súbelo junto con VERSION en sw.js cada vez que cambies la app. */
-const VERSION_APP = 9;
+const VERSION_APP = 11;
 const TIKTOK_URL = CFG.TIKTOK_URL || 'https://www.tiktok.com/@vintageboutiquegt';
 const FN_DETECTAR = CFG.FUNCION_DETECTAR || '';   // Edge Function de detección (opcional)
 const ANCHO_FOTO = 1920;   // px del lado mayor de la foto guardada
@@ -905,83 +905,16 @@ function nombreTienda(){
   return t ? t.nombre : '';
 }
 
-/* ------------------------------------------------------------ CÁMARA */
-let _stream = null;
-let _camaraTrasera = true;
-
-/* La cámara encuadra en 9:16, exactamente la forma de la imagen que se
-   publica. Así lo que la vendedora ve en el marco es lo que sale en el
-   estado, sin recortes sorpresa, y dos fotos a la misma distancia salen
-   iguales en cualquier teléfono. */
-const RATIO_FOTO = 9 / 16;
-
-/** Región exactamente igual a la que se ve en el visor. */
-function recorteVisor(vw, vh){
-  let cw, ch;
-  if (vw / vh > RATIO_FOTO){ ch = vh; cw = Math.round(vh * RATIO_FOTO); }
-  else                     { cw = vw; ch = Math.round(vw / RATIO_FOTO); }
-  return { sx: Math.round((vw - cw) / 2), sy: Math.round((vh - ch) / 2), cw, ch };
-}
-
-async function abrirCamara(){
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-    $('#filecam').click(); return;   // respaldo: cámara del sistema
-  }
-  try{
-    _stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: _camaraTrasera ? { ideal: 'environment' } : { ideal: 'user' },
-        width:  { ideal: 1080 },
-        height: { ideal: 1920 },
-        aspectRatio: { ideal: RATIO_FOTO }
-      },
-      audio: false
-    });
-  }catch(e){
-    console.warn('Cámara no disponible, usamos la del sistema', e);
-    $('#filecam').click();
-    return;
-  }
-
-  const capa = document.createElement('div');
-  capa.className = 'camara';
-  capa.id = 'camara';
-  capa.innerHTML =
-    '<div class="cam-tip">Lo que se ve en el marco es lo que sale en la foto</div>' +
-    '<div class="cam-marco">' +
-      '<video id="video" playsinline autoplay muted></video>' +
-      '<div class="cam-guia"></div>' +
-    '</div>' +
-    '<div class="cam-barra">' +
-      '<button class="cam-ic" data-cam="cerrar" aria-label="Cerrar">' + I.cerrar + '</button>' +
-      '<button class="cam-obt" data-cam="foto" aria-label="Tomar foto"><span></span></button>' +
-      '<button class="cam-ic" data-cam="girar" aria-label="Girar cámara">' + I.girar + '</button>' +
-    '</div>';
-  document.body.appendChild(capa);
-
-  const v = $('#video');
-  v.srcObject = _stream;
-  try{ await v.play(); }catch(e){}
-}
-
-function cerrarCamara(){
-  if (_stream){ _stream.getTracks().forEach(t => t.stop()); _stream = null; }
-  const c = $('#camara'); if (c) c.remove();
-}
-
-async function dispararFoto(){
-  const v = $('#video');
-  if (!v || !v.videoWidth) return;
-
-  // Guardamos EXACTAMENTE el recorte que el visor está mostrando.
-  const { sx, sy, cw, ch } = recorteVisor(v.videoWidth, v.videoHeight);
-  const c = document.createElement('canvas');
-  c.width = cw; c.height = ch;
-  c.getContext('2d').drawImage(v, sx, sy, cw, ch, 0, 0, cw, ch);
-
-  const blob = await aBlob(c);
-  cerrarCamara();
-  await usarFoto(blob);
+/* ------------------------------------------------------------ CÁMARA
+   Usamos la cámara PROPIA DEL TELÉFONO, no una hecha dentro de la app.
+   Razón: cuando una página web pide la cámara por su cuenta, Android
+   entrega un recorte del sensor y la foto sale "con zoom" — se ve más de
+   cerca que en la cámara normal, a la misma distancia. La cámara del
+   sistema entrega el ángulo completo, que es el que la vendedora espera.
+   El encuadre ya no importa para el formato: la imagen final siempre se
+   arma a 1080x1920 sin cortar la prenda. */
+function abrirCamara(){
+  $('#filecam').click();
 }
 
 async function usarFoto(blob){
@@ -1142,7 +1075,8 @@ function vistaAgregar(){
         '<div style="width:100%;max-width:300px;display:flex;flex-direction:column;gap:11px">' +
           '<button class="big mustard" data-camara="1">' +
             '<span class="ic">' + I.camara + '</span>' +
-            '<span><span class="lbl">Abrir cámara</span></span></button>' +
+            '<span><span class="lbl">Abrir cámara</span>' +
+            '<span class="sub">Se abre la cámara del teléfono</span></span></button>' +
           '<button class="big ghost" data-galeria="1">' +
             '<span class="ic">' + I.bajar + '</span>' +
             '<span><span class="lbl">Elegir de la galería</span></span></button>' +
@@ -1282,7 +1216,7 @@ document.addEventListener('click', async (ev) => {
   }
 
   const el = ev.target.closest('[data-tienda],[data-filtro],[data-nueva],[data-atras],' +
-    '[data-camara],[data-galeria],[data-cam],[data-editar],[data-cerraredit],' +
+    '[data-camara],[data-galeria],[data-editar],[data-cerraredit],' +
     '[data-quitar],[data-detectar],[data-continuar],[data-guardar],[data-compartir],' +
     '[data-bajar],[data-vendido],[data-borrar],[data-share],[data-ajustes]');
   if (!el) return;
@@ -1302,14 +1236,8 @@ document.addEventListener('click', async (ev) => {
     return;
   }
 
-  if (d.camara)  { await abrirCamara(); return; }
+  if (d.camara)  { abrirCamara(); return; }
   if (d.galeria) { $('#filein').click(); return; }
-
-  if (d.cam){
-    if (d.cam === 'cerrar'){ cerrarCamara(); return; }
-    if (d.cam === 'foto')  { await dispararFoto(); return; }
-    if (d.cam === 'girar') { _camaraTrasera = !_camaraTrasera; cerrarCamara(); await abrirCamara(); return; }
-  }
 
   if (d.editar != null){ S.editando = parseInt(d.editar, 10); pintar(); return; }
   if (d.cerraredit){ S.editando = null; pintar(); return; }
@@ -1392,7 +1320,7 @@ document.addEventListener('click', async (ev) => {
 window.addEventListener('online',  () => { actualizarSync(); sincronizar(); traerDeLaNube(); });
 window.addEventListener('offline', () => actualizarSync());
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) cerrarCamara(); else sincronizar();
+  if (!document.hidden) sincronizar();
 });
 
 /* --------------------------------------------------------------- INICIO */
@@ -1409,21 +1337,32 @@ document.addEventListener('visibilitychange', () => {
      nueva al abrir y cada 20 minutos, y en cuanto entra se recarga sola
      (nunca a media publicación, para no perder la foto). */
   if ('serviceWorker' in navigator){
-    const habiaSW = !!navigator.serviceWorker.controller;
-    let recargando = false;
-
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!habiaSW || recargando) return;
-      if (S.vista !== 'home' || S.fotoBlob) return;   // está publicando: no molestar
-      recargando = true;
-      location.reload();
-    });
-
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
       .then(reg => {
         reg.update();
         setInterval(() => reg.update(), 20 * 60 * 1000);
       })
       .catch(() => {});
+
+    // Comparamos el número de versión del archivo que está disponible contra
+    // el que está corriendo. No dependemos de escuchar ningún aviso del
+    // navegador: ese aviso a veces llega antes de que la app cargue y se
+    // perdía, y el teléfono se quedaba con la versión vieja.
+    const revisar = async () => {
+      try{
+        if (S.vista !== 'home' || S.fotoBlob) return;      // está publicando
+        const r = await fetch('app.js', { cache: 'no-cache' });
+        if (!r.ok) return;
+        const m = (await r.text()).match(/const VERSION_APP = (\d+)/);
+        if (!m) return;
+        const nueva = parseInt(m[1], 10);
+        if (!nueva || nueva === VERSION_APP) return;
+        if (sessionStorage.getItem('vb_recargada') === String(nueva)) return;
+        sessionStorage.setItem('vb_recargada', String(nueva));
+        location.reload();
+      }catch(e){ /* sin señal: se revisa la próxima vez */ }
+    };
+    [2500, 8000, 20000].forEach(t => setTimeout(revisar, t));
+    setInterval(revisar, 20 * 60 * 1000);
   }
 })();
